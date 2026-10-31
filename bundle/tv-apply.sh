@@ -38,7 +38,7 @@ for f in "$D"/tiles/*; do
 done
 echo "TILEFILES $k"
 
-for x in rotate.txt dock.txt theme.txt; do
+for x in rotate.txt dock.txt theme.txt logo.png; do
   if [ -f "$D/$x" ]; then put "$D/$x" "$x"; echo "WROTE $x"; fi
 done
 if [ -f "$D/pin.txt" ]; then

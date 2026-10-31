@@ -117,6 +117,7 @@ bundle/
   tv-apply.sh               se ejecuta en el TV; copia los archivos dentro de Luk Home con run-as
   themes/<8 temas>/ (10 JPG + name.txt) y order.txt
   tiles/<paquete>.png + .txt   íconos y nombres personalizados
+  logo.png                  logo de la marca (Coplic), arriba a la derecha debajo de Temas/Ajustes
   rotate.txt                20 (segundos)
 ```
 
@@ -124,6 +125,12 @@ Ambos APK son compilaciones *debug* firmadas con la misma llave (necesario para 
 
 ## Cambios
 
+- **2026-10-31c:** Logo **Coplic** en el inicio de Luk Home, arriba a la derecha, debajo de Temas / Wi-Fi / Ajustes y
+  alineado con Ajustes. El instalador copia `bundle/logo.png` a `files/logo.png` dentro de Luk Home. Para cambiarlo, reemplaza
+  `bundle/logo.png` (PNG transparente, ~26 KB; se muestra a 52dp de alto); para quitarlo en un TV:
+  `adb shell run-as com.ivantrj.glasslauncher rm files/logo.png` (sin archivo no se muestra nada). Si borras `bundle/logo.png`
+  del repo, el instalador no pone logo. APKs nuevos: `luk-home.apk` `3d5ed036…ba88bdf`, `luk-home-fos7.apk` `2ca08d7a…f609352d`.
+  Volver a correr la línea del cliente actualiza Luk Home y pone el logo sin borrar nada.
 - **2026-10-31b:** Luk Home ya no se va al inicio cuando una app se actualiza sola (TizenTube, Downloader…). El instalador de
   Android abría la pantalla "Instalar apps desconocidas" y el bloqueo de Ajustes con PIN la cerraba. Ahora esa pantalla pasa
   sin PIN solo cuando la abre el instalador. Si un TV ya tuvo el problema, reinícialo una vez después de actualizar.

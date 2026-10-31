@@ -261,6 +261,8 @@
     New-Item -ItemType Directory -Force -Path (Join-Path $st.stage 'tiles') | Out-Null
     Copy-Item -Recurse -Path (Join-Path $bundle 'themes') -Destination (Join-Path $st.stage 'themes')
     Copy-Item -Path (Join-Path $bundle 'tv-apply.sh') -Destination $st.stage
+    $hasLogo = Test-Path (Join-Path $bundle 'logo.png')
+    if ($hasLogo) { Copy-Item -Path (Join-Path $bundle 'logo.png') -Destination $st.stage }
     WriteLF (Join-Path $st.stage 'rotate.txt') "20`n"
     $ntile = 0
     foreach ($t in Get-ChildItem -Path (Join-Path $bundle 'tiles') -Filter '*.png') {
@@ -292,7 +294,7 @@
     LogQ "stage=$($st.stage) themes=$($order.Count) jpg=$njpg tiles=$ntile kb=$kb"
     if ($dry) {
       Sim "adb push lukhome\ -> /data/local/tmp/ ($($order.Count) temas, $njpg fotos, $ntile iconos, $kb KB)"
-      $w = 'themes/, tiles/, rotate.txt'; if ($wroteDock) { $w += ', dock.txt' }; if ($wroteTheme) { $w += ', theme.txt' }; if ($PIN) { $w += ', pin.txt' }
+      $w = 'themes/, tiles/, rotate.txt'; if ($hasLogo) { $w += ', logo.png' }; if ($wroteDock) { $w += ', dock.txt' }; if ($wroteTheme) { $w += ', theme.txt' }; if ($PIN) { $w += ', pin.txt' }
       Sim "adb shell sh /data/local/tmp/lukhome/tv-apply.sh  (escribe: $w)"
       if ($wroteDock) { Sim ("dock.txt = " + ($dock -join ' ')) }
     }
@@ -307,6 +309,7 @@
         Falla 'No se pudieron guardar los archivos dentro de Luk Home.' ((($out -split "`n") | Where-Object { $_ -match 'LUK_APPLY_FAIL' } | Select-Object -First 1))
       }
       $extra = ''; if ($PIN) { $extra = ', PIN guardado' }
+      if ($hasLogo) { $extra = ', logo' + $extra }
       Bien "$($order.Count) temas, $ntile iconos, rotacion 20 s$extra"
     }
     Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $stRoot; $st.stage = ''

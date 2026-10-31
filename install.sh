@@ -303,6 +303,7 @@ EOS
   mkdir -p "$STAGE/themes" "$STAGE/tiles"
   cp -R "$BUNDLE/themes/." "$STAGE/themes/"
   cp "$BUNDLE/tv-apply.sh" "$STAGE/tv-apply.sh"
+  [ -f "$BUNDLE/logo.png" ] && cp "$BUNDLE/logo.png" "$STAGE/logo.png"   # logo de la marca (debajo de Temas/Ajustes)
   printf '20\n' > "$STAGE/rotate.txt"
   local p name ndock=0 missing="" ntile=0
   for p in "$BUNDLE"/tiles/*.png; do
@@ -330,7 +331,7 @@ EOS
   if [ "$DRY" = 1 ]; then
     bash -n "$STAGE/tv-apply.sh" 2>>"$LOG" || falla "tv-apply.sh tiene un error de sintaxis."
     sim "adb push lukhome/ → /data/local/tmp/ ($nth temas, $njpg fotos, $ntile íconos, $kb KB)"
-    sim "adb shell sh /data/local/tmp/lukhome/tv-apply.sh  (escribe: themes/, tiles/, rotate.txt$( [ -f "$STAGE/dock.txt" ] && echo ', dock.txt')$( [ -f "$STAGE/theme.txt" ] && echo ', theme.txt')$( [ -n "$PIN" ] && echo ', pin.txt'))"
+    sim "adb shell sh /data/local/tmp/lukhome/tv-apply.sh  (escribe: themes/, tiles/, rotate.txt$( [ -f "$STAGE/logo.png" ] && echo ', logo.png')$( [ -f "$STAGE/dock.txt" ] && echo ', dock.txt')$( [ -f "$STAGE/theme.txt" ] && echo ', theme.txt')$( [ -n "$PIN" ] && echo ', pin.txt'))"
     [ -f "$STAGE/dock.txt" ] && sim "dock.txt = $(grep -v '^#' "$STAGE/dock.txt" | tr '\n' ' ')"
   else
     A shell rm -rf /data/local/tmp/lukhome >/dev/null 2>&1
@@ -340,7 +341,7 @@ EOS
     out=$(A shell sh /data/local/tmp/lukhome/tv-apply.sh 2>&1 | tr -d '\r'); logq "apply: $out"
     case "$out" in *LUK_APPLY_OK*) ;; *) A shell rm -rf /data/local/tmp/lukhome >/dev/null 2>&1
       falla "No se pudieron guardar los archivos dentro de Luk Home." "$(printf '%s' "$out" | grep LUK_APPLY_FAIL | head -1)" ;; esac
-    bien "$nth temas, $ntile íconos, rotación 20 s$( [ -n "$PIN" ] && echo ', PIN guardado')"
+    bien "$nth temas, $ntile íconos$( [ -f "$STAGE/logo.png" ] && echo ', logo'), rotación 20 s$( [ -n "$PIN" ] && echo ', PIN guardado')"
   fi
   rm -rf "$(dirname "$STAGE")"; STAGE=""
 
