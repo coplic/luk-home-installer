@@ -121,3 +121,11 @@ bundle/
 ```
 
 Ambos APK son compilaciones *debug* firmadas con la misma llave (necesario para `run-as`). Al actualizar un APK: reemplazarlo en `bundle/apks/`, regenerar `bundle/SHA256SUMS` (`cd bundle && shasum -a 256 apks/*.apk > SHA256SUMS`) y hacer push. GitHub puede tardar ~5 min en servir el archivo nuevo.
+
+## Cambios
+
+- **2026-10-31b:** Luk Home ya no se va al inicio cuando una app se actualiza sola (TizenTube, Downloader…). El instalador de
+  Android abría la pantalla "Instalar apps desconocidas" y el bloqueo de Ajustes con PIN la cerraba. Ahora esa pantalla pasa
+  sin PIN solo cuando la abre el instalador. Si un TV ya tuvo el problema, reinícialo una vez después de actualizar.
+  APKs nuevos: `luk-home.apk` `3c8bb3a3…f444615`, `luk-home-fos7.apk` `45b0ec0b…4509573`. Volver a correr la línea del
+  cliente actualiza Luk Home sin borrar nada (`install -r -g`, misma llave).
