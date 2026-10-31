@@ -41,7 +41,7 @@ La computadora tiene que estar **en el mismo WiFi** que el TV.
 
 ## 3. Cómo activar ADB en el TV
 
-**Fire TV (Fire OS 7 y 8):**
+**Fire TV (Fire OS 6, 7 y 8):**
 1. Ajustes → Mi Fire TV → **Acerca de** → pulsa **7 veces** el nombre del dispositivo ("Fire TV Stick 4K", etc.) hasta que diga que ya eres desarrollador.
 2. Atrás → **Opciones para desarrolladores** → **Depuración ADB: Activado**. ("Apps de origen desconocido" no hace falta.)
 
@@ -57,13 +57,15 @@ La primera vez el TV pregunta **"¿Permitir la depuración USB?"** → marcar "P
 2. **Conexión**: `adb connect IP:5555`. Si el TV pide permiso, muestra el aviso grande y espera. Detecta TV apagado / IP equivocada / ADB apagado.
 3. **Revisión (solo lectura)**: modelo, versión de Android (API), espacio libre, ajustes de accesibilidad y launcher actual, lista de apps. Guarda un **respaldo** en la computadora.
 4. **Instala** el APK correcto con `adb install -r` (actualiza sin borrar datos; si ya está la misma versión, no hace nada):
-   - API 28 (Fire OS 7) → `luk-home-fos7.apk`
+   - API 25–27 (Fire OS 6, Android 7.1) → `luk-home-fos6.apk` (en Fire OS 6 no hay `sha256sum`: reinstalla siempre, sin borrar datos)
+   - API 28–29 (Fire OS 7) → `luk-home-fos7.apk`
    - API 30 o más (Fire OS 8, Google TV) → `luk-home.apk`
 5. **Archivos** dentro de Luk Home (solo su carpeta privada): los 8 temas, íconos personalizados de las apps instaladas, rotación de fondo cada 20 s, tema inicial, PIN y **dock** con solo Stremio, IPTV Smarters y TizenTube (las que estén instaladas; avisa cuáles faltan). Las demás apps quedan en "Otras apps".
 6. **Botón Inicio**: activa el servicio de accesibilidad de Luk Home. Si otro launcher (p. ej. Projectivy) tenía ese servicio, **solo se reemplaza su entrada** (la app no se toca ni se desinstala); otros servicios de accesibilidad se conservan. En Google TV con un launcher de terceros como inicio, pone Luk Home como inicio.
+   **Fire OS 6 (API 25–27):** Amazon no deja correr servicios de accesibilidad de apps instaladas por fuera, así que ahí no se toca la accesibilidad: se da a Luk Home el **acceso de uso** (`appops set com.ivantrj.glasslauncher GET_USAGE_STATS allow`) y Luk Home vigila qué app está al frente.
 7. **Comprueba** ajustes, temas y PIN, abre Luk Home, pulsa Inicio y muestra **LISTO**.
 
-Si algo falla después del paso 6, **devuelve los ajustes del botón Inicio como estaban** antes de salir.
+Si algo falla después del paso 6, **devuelve los ajustes del botón Inicio (y el acceso de uso en Fire OS 6) como estaban** antes de salir.
 
 **Se puede repetir sin problema** (idempotente): no reinstala si ya está igual, **no pisa el dock** ni el tema que el cliente ya tenga (salvo `--nuevo-dock` o pasar un tema explícito), actualiza temas/íconos y el PIN.
 
@@ -86,10 +88,11 @@ El registro **no** contiene el PIN.
 | **No se aceptó el permiso en el TV a tiempo** | Repetir la línea y pulsar **Permitir** en el TV. Si el aviso no aparece: apagar y prender Depuración ADB, repetir. |
 | **la conexión queda "offline"** | Apagar/prender Depuración ADB o reiniciar el TV; repetir. |
 | **otro Luk Home con una firma distinta** | El TV tiene un Luk Home de otra compilación. Desinstalarlo (Ajustes → Aplicaciones) y repetir. |
-| **demasiado viejo** | Fire OS 6 o anterior (API < 28): no compatible. |
+| **demasiado viejo** | Fire OS 5 o anterior (API < 25, Android 5.1 o 6): no compatible. |
 | **casi no tiene espacio libre** | Hacen falta ~60 MB. Liberar espacio y repetir. |
 | Google TV: aviso de **Play Protect** | Elegir "Instalar de todas formas". |
 | Fire TV 7: Inicio muestra el menú de Amazon un instante | Normal: Luk Home aparece a los ~5 s. |
+| Fire TV 6: Inicio muestra el menú de Amazon un instante | Normal: Luk Home vuelve en menos de 1 s. Después de reiniciar el TV, el inicio de Amazon se ve ~1 minuto y luego aparece Luk Home solo. |
 | Windows: "no se reconoce irm" / errores rojos de TLS | Usar **Windows PowerShell** (no CMD) y copiar la línea completa, incluido `[Net.ServicePointManager]...`. |
 | Mac: "xcrun"/"developer tools" | No hace falta; si macOS lo ofrece, se puede cancelar. Solo usa `curl`, `unzip` y `bash` del sistema. |
 
@@ -112,7 +115,8 @@ install.ps1           instalador Windows (PowerShell 5.1+, solo ASCII)
 CLIENTE.md            pasos para el cliente
 bundle/
   apks/luk-home.apk         Fire OS 8 / Google TV (API 30+)
-  apks/luk-home-fos7.apk    Fire OS 7 (API 28)
+  apks/luk-home-fos7.apk    Fire OS 7 (API 28-29)
+  apks/luk-home-fos6.apk    Fire OS 6 (API 25-27)
   SHA256SUMS, VERSION
   tv-apply.sh               se ejecuta en el TV; copia los archivos dentro de Luk Home con run-as
   themes/<8 temas>/ (10 JPG + name.txt) y order.txt
@@ -121,10 +125,15 @@ bundle/
   rotate.txt                20 (segundos)
 ```
 
-Ambos APK son compilaciones *debug* firmadas con la misma llave (necesario para `run-as`). Al actualizar un APK: reemplazarlo en `bundle/apks/`, regenerar `bundle/SHA256SUMS` (`cd bundle && shasum -a 256 apks/*.apk > SHA256SUMS`) y hacer push. GitHub puede tardar ~5 min en servir el archivo nuevo.
+Los tres APK son compilaciones *debug* firmadas con la misma llave (necesario para `run-as`). Al actualizar un APK: reemplazarlo en `bundle/apks/`, regenerar `bundle/SHA256SUMS` (`cd bundle && shasum -a 256 apks/*.apk logo.png > SHA256SUMS`) y hacer push. GitHub puede tardar ~5 min en servir el archivo nuevo.
 
 ## Cambios
 
+- **2026-10-31d:** Soporte para **Fire OS 6** (API 25–27; p. ej. Fire TV Stick 4K de 1.a generación "AFTMM"). Nuevo
+  `bundle/apks/luk-home-fos6.apk` (mismo Luk Home: dock, fondos que rotan, 8 temas, íconos, logo, PIN). En Fire OS 6
+  Amazon no permite el servicio de accesibilidad, así que el botón Inicio funciona con el **acceso de uso**
+  (`GET_USAGE_STATS`), que el instalador da en el paso 6 y devuelve si algo falla. API 28–29 sigue con `luk-home-fos7.apk`,
+  30+ con `luk-home.apk`; por debajo de 25 sale el mensaje "demasiado viejo". Probado en un AFTMM con Fire OS 6.7.1.1.
 - **2026-10-31c:** Logo **Coplic** en el inicio de Luk Home, arriba a la derecha, debajo de Temas / Wi-Fi / Ajustes y
   alineado con Ajustes. El instalador copia `bundle/logo.png` a `files/logo.png` dentro de Luk Home. Para cambiarlo, reemplaza
   `bundle/logo.png` (PNG transparente, ~26 KB; se muestra a 52dp de alto); para quitarlo en un TV:

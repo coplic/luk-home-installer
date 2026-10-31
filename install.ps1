@@ -23,8 +23,8 @@
   $LAUNCHER_SVC_PKGS = @('com.spocky.projengmenu', 'com.wolf.firelauncher', 'com.wolf.firelaunchermanager', 'com.lauritz.homebutton', 'com.appgenz.launchermanager')
 
   # Estado compartido (hashtable: las funciones internas lo modifican por referencia)
-  $st = @{ adb = ''; serial = ''; accChanged = $false; homeChanged = $false; success = $false
-           oldSvc = ''; oldEn = ''; oldHome = ''; log = ''; stage = '' }
+  $st = @{ adb = ''; serial = ''; accChanged = $false; homeChanged = $false; uopChanged = $false; success = $false
+           oldSvc = ''; oldEn = ''; oldHome = ''; oldUop = ''; log = ''; stage = '' }
 
   $IP = "$IP".Trim(); $PIN = "$PIN".Trim(); $THEME = "$THEME".Trim()
   $themeGiven = $THEME -ne ''
@@ -68,7 +68,7 @@
   }
 
   function RestoreAcc {
-    if (-not $st.accChanged -and -not $st.homeChanged) { return }
+    if (-not $st.accChanged -and -not $st.homeChanged -and -not $st.uopChanged) { return }
     Say '   Devolviendo el TV como estaba (boton Inicio)...'
     if ($st.accChanged) {
       if (-not $st.oldSvc -or $st.oldSvc -eq 'null') { A shell settings delete secure enabled_accessibility_services | Out-Null }
@@ -77,7 +77,8 @@
       else { A shell settings put secure accessibility_enabled $st.oldEn | Out-Null }
     }
     if ($st.homeChanged -and $st.oldHome) { A shell cmd package set-home-activity $st.oldHome | Out-Null }
-    $st.accChanged = $false; $st.homeChanged = $false
+    if ($st.uopChanged) { $u = if ($st.oldUop) { $st.oldUop } else { 'default' }; A shell appops set $PKG GET_USAGE_STATS $u | Out-Null }
+    $st.accChanged = $false; $st.homeChanged = $false; $st.uopChanged = $false
     Say '   Listo: el boton Inicio quedo como antes.'
   }
 
@@ -195,8 +196,12 @@
       if ((S pm list features) -notmatch 'android.software.leanback|android.hardware.type.television') { Falla "El aparato en $IP no es un TV ($maker $model)." 'Revisa la IP en el TV: Ajustes > Mi Fire TV > Acerca de > Red.' }
     }
     if ($sdk -ge 30) { $apkName = 'luk-home.apk' } elseif ($sdk -ge 28) { $apkName = 'luk-home-fos7.apk' }
-    else { Falla "Este TV es demasiado viejo para Luk Home (Android API $sdk; se necesita Fire OS 7 o mas nuevo)." }
+    elseif ($sdk -ge 25) { $apkName = 'luk-home-fos6.apk' }   # Fire OS 6 (Android 7.1)
+    else { Falla "Este TV es demasiado viejo para Luk Home (Android API $sdk)." 'Luk Home necesita Fire OS 6 o mas nuevo (Fire TV Stick 4K, Fire TV Cube, Stick 2.a gen. o mas nuevos; Android 7.1 o mas nuevo).' }
     Bien "$maker $model - $platform, API $sdk -> $apkName"
+    # Android 7.1-8.1: Luk Home vigila la app de enfrente con "acceso de uso". En Fire OS 6 Amazon no deja correr
+    # servicios de accesibilidad instalados por fuera (A11yAuthorizer), asi que ahi solo se usa el acceso de uso.
+    $useUop = $sdk -lt 28; $useAcc = -not ($useUop -and $platform -like 'Fire*')
 
     $free = 0
     $dfl = @((S df -k /data) -split "`n" | Where-Object { $_ -match '\S' })
@@ -212,7 +217,8 @@
     $lukPresent = $installed -contains $PKG; $lukSha = ''; $hasDock = $false; $hasTheme = $false
     if ($lukPresent) {
       $lp = ((S pm path $PKG) -split "`n")[0] -replace '^package:', ''
-      $lukSha = ((S sha256sum $lp) -split '\s+')[0]
+      $lukSha = ((S sha256sum $lp) -split '\s+')[0]   # Fire OS 6 no tiene sha256sum: vacio = se reinstala (conserva los datos)
+      if ((S appops get $PKG GET_USAGE_STATS) -match 'GET_USAGE_STATS: ([a-z]+)') { $st.oldUop = $Matches[1] }
       $hasDock = (S run-as $PKG ls files/dock.txt) -match '^files/dock.txt$'
       $hasTheme = (S run-as $PKG ls files/theme.txt) -match '^files/theme.txt$'
       Bien 'Luk Home ya estaba instalado (se actualiza sin perder nada)'
@@ -221,7 +227,7 @@
     $bk = Join-Path $work "respaldos\$ipName-$ts"; if ($dry) { $bk = "$bk-simulacion" }
     New-Item -ItemType Directory -Force -Path $bk | Out-Null
     WriteLF (Join-Path $bk 'antes.txt') ("fecha=$ts ip=$IP modelo=$maker $model plataforma=$platform api=$sdk apk=$apkName`n" +
-      "enabled_accessibility_services=$($st.oldSvc)`naccessibility_enabled=$($st.oldEn)`nhome=$($st.oldHome)`nluk_instalado=$lukPresent luk_sha256=$lukSha`n")
+      "enabled_accessibility_services=$($st.oldSvc)`naccessibility_enabled=$($st.oldEn)`nhome=$($st.oldHome)`nget_usage_stats=$(if ($st.oldUop) { $st.oldUop } else { 'default' })`nluk_instalado=$lukPresent luk_sha256=$lukSha`n")
     WriteLF (Join-Path $bk 'paquetes.txt') (($installed -join "`n") + "`n")
     if ($hasDock) { WriteLF (Join-Path $bk 'dock-antes.txt') ((S run-as $PKG cat files/dock.txt) + "`n") }
     Bien 'Respaldo de la configuracion guardado en la computadora'
@@ -236,6 +242,7 @@
       else { $keep += $s }
     }
     $newSvc = (@($keep) + $SERVICE) -join ':'
+    if (-not $useAcc) { $newSvc = $st.oldSvc; $removed = @() }   # Fire OS 6: la accesibilidad no se toca
     if ($removed.Count) { Aviso "Otro launcher controlaba el boton Inicio: $($removed -join ' '). Se reemplaza por Luk Home (la app NO se desinstala)." }
     $setHome = $st.oldHome -and -not ((@($STOCK_HOMES) + $PKG) -contains ($st.oldHome -split '/')[0])
 
@@ -316,7 +323,13 @@
 
     # ---------- 6. boton Inicio ----------
     Paso 6 'Haciendo que el boton Inicio abra Luk Home'
-    if ($st.oldSvc -eq $newSvc -and $st.oldEn -eq '1') { Bien 'Ya estaba activado' }
+    if ($useUop) {
+      if ($st.oldUop -eq 'allow') { Bien 'Acceso de uso ya estaba permitido' }
+      elseif ($dry) { Sim "appops set $PKG GET_USAGE_STATS allow   (antes: $(if ($st.oldUop) { $st.oldUop } else { 'default' }))" }
+      else { $st.uopChanged = $true; LogQ (A shell appops set $PKG GET_USAGE_STATS allow); Bien 'Acceso de uso permitido (asi Luk Home ve cuando aparece el inicio de Amazon)' }
+    }
+    if (-not $useAcc) { Bien 'Fire OS 6: no usa accesibilidad (Amazon no la permite en apps instaladas por fuera)' }
+    elseif ($st.oldSvc -eq $newSvc -and $st.oldEn -eq '1') { Bien 'Ya estaba activado' }
     elseif ($dry) {
       Sim "settings put secure enabled_accessibility_services $newSvc   (antes: $($st.oldSvc))"
       Sim "settings put secure accessibility_enabled 1   (antes: $($st.oldEn))"
@@ -343,9 +356,15 @@
       Say "  Registro: $($st.log)"
       return
     }
-    $vSvc = S settings get secure enabled_accessibility_services; $vEn = S settings get secure accessibility_enabled
-    if ((":" + $vSvc + ":") -notlike "*:$($SERVICE):*") { Falla 'El TV no acepto el ajuste del boton Inicio.' "Valor leido: $vSvc" }
-    if ($vEn -ne '1') { Falla "El TV no acepto activar la accesibilidad (accessibility_enabled=$vEn)." }
+    if ($useAcc) {
+      $vSvc = S settings get secure enabled_accessibility_services; $vEn = S settings get secure accessibility_enabled
+      if ((":" + $vSvc + ":") -notlike "*:$($SERVICE):*") { Falla 'El TV no acepto el ajuste del boton Inicio.' "Valor leido: $vSvc" }
+      if ($vEn -ne '1') { Falla "El TV no acepto activar la accesibilidad (accessibility_enabled=$vEn)." }
+    }
+    if ($useUop) {
+      $vUop = S appops get $PKG GET_USAGE_STATS
+      if ($vUop -notmatch 'GET_USAGE_STATS: allow') { Falla 'El TV no acepto el acceso de uso para Luk Home.' "Valor leido: $vUop" }
+    }
     if ((S pm path $PKG) -notmatch 'package:') { Falla 'Luk Home no aparece instalado.' }
     $vTheme = ((S run-as $PKG cat files/theme.txt) -split "`n")[0].Trim(); if (-not $vTheme) { $vTheme = $THEME }
     $vJpg = @((S run-as $PKG ls "files/themes/$vTheme") -split "`n" | Where-Object { $_ -match '\.jpg$' }).Count

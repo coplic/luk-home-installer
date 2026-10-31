@@ -1,3 +1,4 @@
-luk-home-installer 2026-10-31c (logo Coplic en el inicio + installer fix)
+luk-home-installer 2026-10-31d (Fire OS 6 / API 25-27 + logo Coplic + installer fix)
 luk-home.apk = glass-luk.apk (API 30+)
-luk-home-fos7.apk = main source -PfireOs7 (API 28)
+luk-home-fos7.apk = main source -PfireOs7 (API 28-29)
+luk-home-fos6.apk = glass-luk-fos6.apk, variant fos6 -PfireOs6 (API 25-27)

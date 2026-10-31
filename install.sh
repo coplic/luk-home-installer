@@ -59,11 +59,12 @@ main() {
   aviso() { say "   ${Y}!${N} $*"; }
   sim()   { say "   ${Y}[simulación]${N} $*"; }
 
-  SERIAL="" ADB="" ACC_CHANGED=0 HOME_CHANGED=0 SUCCESS=0
-  OLD_SVC="" OLD_EN="" OLD_HOME="" BK="" STAGE="" BUNDLE=""
+  SERIAL="" ADB="" ACC_CHANGED=0 HOME_CHANGED=0 UOP_CHANGED=0 SUCCESS=0
+  OLD_SVC="" OLD_EN="" OLD_HOME="" OLD_UOP="" BK="" STAGE="" BUNDLE=""
+  USE_ACC=1 USE_UOP=0   # Fire OS 6: sin accesibilidad (Amazon no la deja correr), con "acceso de uso" (GET_USAGE_STATS)
 
   restore_acc() {
-    [ "$ACC_CHANGED" = 1 ] || [ "$HOME_CHANGED" = 1 ] || return 0
+    [ "$ACC_CHANGED" = 1 ] || [ "$HOME_CHANGED" = 1 ] || [ "$UOP_CHANGED" = 1 ] || return 0
     say "   Devolviendo el TV como estaba (botón Inicio)..."
     if [ "$ACC_CHANGED" = 1 ]; then
       if [ -z "$OLD_SVC" ] || [ "$OLD_SVC" = null ]; then A shell settings delete secure enabled_accessibility_services >/dev/null 2>&1
@@ -72,7 +73,8 @@ main() {
       else A shell settings put secure accessibility_enabled "$OLD_EN" >/dev/null 2>&1; fi
     fi
     if [ "$HOME_CHANGED" = 1 ] && [ -n "$OLD_HOME" ]; then A shell cmd package set-home-activity "$OLD_HOME" >/dev/null 2>&1; fi
-    ACC_CHANGED=0; HOME_CHANGED=0
+    if [ "$UOP_CHANGED" = 1 ]; then A shell appops set "$PKG" GET_USAGE_STATS "${OLD_UOP:-default}" >/dev/null 2>&1; fi
+    ACC_CHANGED=0; HOME_CHANGED=0; UOP_CHANGED=0
     say "   Listo: el botón Inicio quedó como antes."
   }
   falla() {
@@ -223,8 +225,12 @@ main() {
   fi
   if [ "$SDK" -ge 30 ]; then APK_NAME=luk-home.apk
   elif [ "$SDK" -ge 28 ]; then APK_NAME=luk-home-fos7.apk
-  else falla "Este TV es demasiado viejo para Luk Home (Android API $SDK; se necesita Fire OS 7 o más nuevo)."; fi
+  elif [ "$SDK" -ge 25 ]; then APK_NAME=luk-home-fos6.apk   # Fire OS 6 (Android 7.1)
+  else falla "Este TV es demasiado viejo para Luk Home (Android API $SDK)." "Luk Home necesita Fire OS 6 o más nuevo (Fire TV Stick 4K, Fire TV Cube, Stick 2.ª gen. o más nuevos; Android 7.1 o más nuevo)."; fi
   bien "$MAKER $MODEL — $PLATFORM, API $SDK → $APK_NAME"
+  # Android 7.1-8.1: Luk Home vigila la app de enfrente con "acceso de uso". En Fire OS 6 Amazon no deja correr
+  # servicios de accesibilidad instalados por fuera (A11yAuthorizer), así que ahí solo se usa el acceso de uso.
+  if [ "$SDK" -lt 28 ]; then USE_UOP=1; case "$PLATFORM" in Fire*) USE_ACC=0 ;; esac; fi
 
   local FREE; FREE=$(S df -k /data | awk 'NR>1 {v=$4} END {print v+0}')
   if [ "${FREE:-0}" -gt 0 ] && [ "$FREE" -lt 60000 ]; then
@@ -240,7 +246,8 @@ main() {
   local LUK_PRESENT=0 LUK_SHA="" HAS_DOCK=0 HAS_THEME=0
   if inlist "$PKG" "$INSTALLED"; then
     LUK_PRESENT=1
-    LUK_SHA=$(S sha256sum "$(S pm path "$PKG" | head -1 | sed 's/^package://')" | awk '{print $1}')
+    OLD_UOP=$(S appops get "$PKG" GET_USAGE_STATS | sed -n 's/^GET_USAGE_STATS: \([a-z]*\).*/\1/p' | head -1)
+    LUK_SHA=$(S sha256sum "$(S pm path "$PKG" | head -1 | sed 's/^package://')" | awk '{print $1}')   # Fire OS 6 no tiene sha256sum: vacío = se reinstala (conserva los datos)
     S run-as "$PKG" ls files/dock.txt | grep -q '^files/dock.txt$' && HAS_DOCK=1
     S run-as "$PKG" ls files/theme.txt | grep -q '^files/theme.txt$' && HAS_THEME=1
     bien "Luk Home ya estaba instalado (se actualiza sin perder nada)"
@@ -253,12 +260,13 @@ main() {
     echo "enabled_accessibility_services=$OLD_SVC"
     echo "accessibility_enabled=$OLD_EN"
     echo "home=$OLD_HOME"
+    echo "get_usage_stats=${OLD_UOP:-default}"
     echo "luk_instalado=$LUK_PRESENT luk_sha256=$LUK_SHA"
   } > "$BK/antes.txt"
   printf '%s\n' "$INSTALLED" | tr ' ' '\n' | grep . > "$BK/paquetes.txt"
   [ "$HAS_DOCK" = 1 ] && S run-as "$PKG" cat files/dock.txt > "$BK/dock-antes.txt"
   bien "Respaldo de la configuración guardado en la computadora"
-  logq "backup=$BK old_svc=$OLD_SVC old_en=$OLD_EN old_home=$OLD_HOME"
+  logq "backup=$BK old_svc=$OLD_SVC old_en=$OLD_EN old_home=$OLD_HOME old_uop=${OLD_UOP:-default} use_acc=$USE_ACC use_uop=$USE_UOP"
 
   # Nuevo valor de accesibilidad: quita solo los redirects de otros launchers y el nuestro, conserva el resto.
   local NEW_SVC="" REMOVED="" s spkg
@@ -274,6 +282,7 @@ main() {
 $(printf '%s' "$OLD_SVC" | tr ':' '\n')
 EOS
   NEW_SVC="${NEW_SVC:+$NEW_SVC:}$SERVICE"
+  if [ "$USE_ACC" = 0 ]; then NEW_SVC="$OLD_SVC"; REMOVED=""; fi   # Fire OS 6: la accesibilidad no se toca
   [ -n "$REMOVED" ] && aviso "Otro launcher controlaba el botón Inicio:${REMOVED}. Se reemplaza por Luk Home (la app NO se desinstala)."
   local SET_HOME=0
   if [ -n "$OLD_HOME" ] && ! inlist "${OLD_HOME%%/*}" "$STOCK_HOMES $PKG"; then SET_HOME=1; fi
@@ -347,7 +356,18 @@ EOS
 
   # ---------- 6. botón Inicio ----------
   paso 6 "Haciendo que el botón Inicio abra Luk Home"
-  if [ "$OLD_SVC" = "$NEW_SVC" ] && [ "$OLD_EN" = 1 ]; then
+  if [ "$USE_UOP" = 1 ]; then
+    if [ "$OLD_UOP" = allow ]; then bien "Acceso de uso ya estaba permitido"
+    elif [ "$DRY" = 1 ]; then sim "appops set $PKG GET_USAGE_STATS allow   (antes: ${OLD_UOP:-default})"
+    else
+      UOP_CHANGED=1
+      A shell appops set "$PKG" GET_USAGE_STATS allow >>"$LOG" 2>&1
+      bien "Acceso de uso permitido (así Luk Home ve cuándo aparece el inicio de Amazon)"
+    fi
+  fi
+  if [ "$USE_ACC" = 0 ]; then
+    bien "Fire OS 6: no usa accesibilidad (Amazon no la permite en apps instaladas por fuera)"
+  elif [ "$OLD_SVC" = "$NEW_SVC" ] && [ "$OLD_EN" = 1 ]; then
     bien "Ya estaba activado"
   elif [ "$DRY" = 1 ]; then
     sim "settings put secure enabled_accessibility_services $NEW_SVC   (antes: $OLD_SVC)"
@@ -374,10 +394,16 @@ EOS
     say "  Registro: $LOG"
     return 0
   fi
-  local v_svc v_en v_pin v_jpg v_theme
-  v_svc=$(S settings get secure enabled_accessibility_services); v_en=$(S settings get secure accessibility_enabled)
-  case ":$v_svc:" in *":$SERVICE:"*) ;; *) falla "El TV no aceptó el ajuste del botón Inicio." "Valor leído: $v_svc" ;; esac
-  [ "$v_en" = 1 ] || falla "El TV no aceptó activar la accesibilidad (accessibility_enabled=$v_en)."
+  local v_svc v_en v_pin v_jpg v_theme v_uop
+  if [ "$USE_ACC" = 1 ]; then
+    v_svc=$(S settings get secure enabled_accessibility_services); v_en=$(S settings get secure accessibility_enabled)
+    case ":$v_svc:" in *":$SERVICE:"*) ;; *) falla "El TV no aceptó el ajuste del botón Inicio." "Valor leído: $v_svc" ;; esac
+    [ "$v_en" = 1 ] || falla "El TV no aceptó activar la accesibilidad (accessibility_enabled=$v_en)."
+  fi
+  if [ "$USE_UOP" = 1 ]; then
+    v_uop=$(S appops get "$PKG" GET_USAGE_STATS)
+    case "$v_uop" in *"GET_USAGE_STATS: allow"*) ;; *) falla "El TV no aceptó el acceso de uso para Luk Home." "Valor leído: $v_uop" ;; esac
+  fi
   S pm path "$PKG" | grep -q package: || falla "Luk Home no aparece instalado."
   v_theme=$(S run-as "$PKG" cat files/theme.txt | head -1)
   v_jpg=$(S run-as "$PKG" ls "files/themes/${v_theme:-$THEME}" | grep -ci '\.jpg$')
