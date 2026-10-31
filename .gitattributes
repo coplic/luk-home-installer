@@ -1,0 +1,9 @@
+*.sh   text eol=lf
+*.ps1  text eol=crlf
+*.md   text eol=lf
+*.txt  -text
+SHA256SUMS -text
+VERSION -text
+*.apk  binary
+*.jpg  binary
+*.png  binary
