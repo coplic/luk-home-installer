@@ -23,7 +23,7 @@ $IP='192.168.1.50'; $PIN='1234'; $THEME='paisajes'; [Net.ServicePointManager]::S
 - **IP**: la del TV del cliente (ver abajo).
 - **PIN**: 4 números, protege Ajustes de Luk Home. En Windows **siempre entre comillas** (`'0123'`) para no perder ceros. Para no poner PIN: `sinpin`.
 - **Tema** (opcional): `paisajes`, `mar`, `espacio`, `autos`, `animales`, `barcos`, `american-sports`, `halloween-terror`,
-  o un tema personalizado (ver abajo). En Mac va como 3.er valor; en Windows `$THEME='mar';` (o quítalo).
+  o un tema personalizado (ver abajo; ya vienen `real-madrid` y `navidad`). En Mac va como 3.er valor; en Windows `$THEME='mar';` (o quítalo).
   - **Un solo nombre** (`mar`): van al TV **todos** los temas y `mar` queda como tema inicial.
   - **Una lista con comas, sin espacios** (`autos,mar,espacio`): van al TV **solo esos**; el **primero** es el inicial.
     `todos` dentro de la lista agrega todos los incluidos (p. ej. `halloween-terror,todos`).
@@ -40,6 +40,16 @@ $IP='192.168.1.50'; $PIN='1234'; $THEME='paisajes'; [Net.ServicePointManager]::S
    `taller-perez,mar,autos` (solo esos tres).
 
 Un tema personalizado solo llega a los TV en cuya línea aparece su nombre.
+
+Temas personalizados que ya vienen en el paquete (fuera de `order.txt`, solo para quien los pida):
+
+| Nombre en la línea | Botón Temas | Contenido |
+|---|---|---|
+| `real-madrid` | Real Madrid | estadio de noche, afición con bufandas blancas, copa, balón blanco y oro, "HALA MADRID", Cibeles y Gran Vía de noche |
+| `navidad` | Navidad | chimenea, árbol decorado, pueblo nevado, trineo de Santa, adornos, regalos, cabaña nevada |
+
+Ejemplos: Mac `… 1234 real-madrid` (Real Madrid inicial + todos los incluidos), `… 1234 real-madrid,navidad` (solo esos dos);
+Windows `$THEME='real-madrid';` o `$THEME='navidad,todos';`.
 
 Extras opcionales:
 
@@ -172,6 +182,14 @@ Los tres APK son compilaciones *debug* firmadas con la misma llave (necesario pa
 
 ## Cambios
 
+- **2026-11-01b:** Dos temas personalizados nuevos (10 fondos cada uno, 1920×1080): `real-madrid` (Real Madrid) y
+  `navidad` (Navidad). No están en `order.txt`: solo llegan a los TV cuya línea los nombra. **Botones solo íconos:** los
+  tres botones de arriba a la derecha (Temas, red y Ajustes) ahora son círculos con solo el ícono, sin palabras, con un
+  aro claro cuando el control está encima. El ícono de **red** está **verde** si el TV tiene conexión (Wi-Fi o cable) y
+  **rojo con una raya** si no la tiene; cambia solo al momento. Todo lo demás igual (menú de Temas, PIN de Ajustes, el
+  botón de red abre los ajustes de Wi-Fi, el logo sigue alineado con Ajustes). Nuevos `luk-home.apk`, `luk-home-fos7.apk`
+  y `luk-home-fos6.apk` (misma firma: al actualizar se conservan el dock, el PIN y los temas): `62d46ff8…b24b154`,
+  `6dcaf0d2…6c17904a`, `c6e4b65e…c9f555a` (ver `bundle/SHA256SUMS`). Sin cambios en los scripts.
 - **2026-11-01a:** **Actualización de apps** (paso 8 nuevo): si Stremio, IPTV Smarters o TizenTube ya están instaladas y
   hay una versión oficial más nueva, se actualizan con `adb install -r` (sin perder datos ni sesiones). Nunca instala apps
   que falten, nunca desinstala ni baja de versión; con firma distinta solo avisa. Se salta con `--sin-actualizar` /
