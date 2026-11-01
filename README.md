@@ -7,17 +7,22 @@ Lo único que toca de las apps del cliente: si **Stremio, IPTV Smarters o TizenT
 
 ## Copiar y pegar: línea con todos los temas
 
-El primer tema de la lista es el inicial; borra los que no quieras y deja las comas sin espacios.
-Cambia `192.168.0.x` por la IP del TV y `1234` por el PIN del cliente.
+La línea tiene 5 partes separadas por **espacios**: IP, PIN, TEMAS, CIUDAD, APPS.
+
+- **IP**: cambia `192.168.0.x` por la IP del TV (también puede empezar con `10.0.0.`).
+- **PIN**: cambia `1234` por el PIN del cliente.
+- **TEMAS**: solo se instalan los temas que dejes en la línea. Si dejas solo `real-madrid`, el TV tendrá solo ese tema. El primero es el inicial; borra los que no quieras y deja las comas sin espacios. Para que se vayan mezclando, pon `aleatorio,` al principio (imágenes de todos los temas) o `rotar,` (cambia de tema cada hora). Ejemplo: `aleatorio,real-madrid,navidad,autos`.
+- **CIUDAD** (para el tiempo): `auto` = el TV la detecta solo. O pon la ciudad, por ejemplo `Miami`. Si tiene dos palabras, va entre comillas: `"Fort Lauderdale"`.
+- **APPS** extra en el inicio, junto a Stremio, IPTV Smarters y TizenTube: cambia `netflix,youtube,disney` por las apps del cliente, o pon `todas`. Si no quieres apps extra, borra esa última parte (en Windows borra `$APPS='...';`).
 
 **Mac** (app Terminal):
 ```bash
-curl -fsSL https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.sh | bash -s -- 192.168.0.x 1234 real-madrid,navidad,terror,american-sports,autos,animales,mar,barcos,espacio,paisajes
+curl -fsSL https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.sh | bash -s -- 192.168.0.x 1234 real-madrid,navidad,terror,american-sports,autos,animales,mar,barcos,espacio,paisajes auto netflix,youtube,disney
 ```
 
 **Windows** (PowerShell normal, sin administrador; es una sola línea):
 ```powershell
-$IP='192.168.0.x'; $PIN='1234'; $THEME='real-madrid,navidad,terror,american-sports,autos,animales,mar,barcos,espacio,paisajes'; [Net.ServicePointManager]::SecurityProtocol='Tls12'; irm https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.ps1 | iex
+$IP='192.168.0.x'; $PIN='1234'; $THEME='real-madrid,navidad,terror,american-sports,autos,animales,mar,barcos,espacio,paisajes'; $CIUDAD='auto'; $APPS='netflix,youtube,disney'; [Net.ServicePointManager]::SecurityProtocol='Tls12'; irm https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.ps1 | iex
 ```
 
 | Nombre en la línea | Botón Temas | Tipo |
@@ -39,17 +44,17 @@ Si el TV ya tenía la carpeta vieja `halloween-terror`, al repetir el instalador
 ## 1. Qué le mandas al cliente
 
 1. El archivo **[CLIENTE.md](CLIENTE.md)** (o su texto), con los 4 pasos que verá.
-2. **La línea de su sistema**, ya con **su IP y su PIN** puestos (cambia `192.168.1.50` y `1234`). Trae todos los temas:
-   el primero es el inicial; borra los que no quieras y deja las comas sin espacios.
+2. **La línea de su sistema**, ya con **su IP y su PIN** puestos (cambia `192.168.1.50` y `1234`). Trae todos los temas, la ciudad y las apps extra
+   (lee arriba qué es cada parte; solo se instalan los temas que dejes en la línea).
 
 **Mac** (app Terminal):
 ```bash
-curl -fsSL https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.sh | bash -s -- 192.168.1.50 1234 real-madrid,navidad,terror,american-sports,autos,animales,mar,barcos,espacio,paisajes
+curl -fsSL https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.sh | bash -s -- 192.168.1.50 1234 real-madrid,navidad,terror,american-sports,autos,animales,mar,barcos,espacio,paisajes auto netflix,youtube,disney
 ```
 
 **Windows** (PowerShell normal, sin administrador; es una sola línea):
 ```powershell
-$IP='192.168.1.50'; $PIN='1234'; $THEME='real-madrid,navidad,terror,american-sports,autos,animales,mar,barcos,espacio,paisajes'; [Net.ServicePointManager]::SecurityProtocol='Tls12'; irm https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.ps1 | iex
+$IP='192.168.1.50'; $PIN='1234'; $THEME='real-madrid,navidad,terror,american-sports,autos,animales,mar,barcos,espacio,paisajes'; $CIUDAD='auto'; $APPS='netflix,youtube,disney'; [Net.ServicePointManager]::SecurityProtocol='Tls12'; irm https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.ps1 | iex
 ```
 
 - **IP**: la del TV del cliente (ver abajo).
