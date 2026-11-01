@@ -5,28 +5,60 @@ Modo **solo launcher**: no borra apps, no desinstala nada (tampoco Projectivy u 
 Lo único que toca de las apps del cliente: si **Stremio, IPTV Smarters o TizenTube** ya están instaladas y hay una versión oficial
 **más nueva**, las actualiza con `adb install -r` (conserva datos y sesiones). Ver paso 8.
 
-## 1. Qué le mandas al cliente
+## Copiar y pegar: línea con todos los temas
 
-1. El archivo **[CLIENTE.md](CLIENTE.md)** (o su texto), con los 4 pasos que verá.
-2. **La línea de su sistema**, ya con **su IP y su PIN** puestos (cambia `192.168.1.50` y `1234`):
+El primer tema de la lista es el inicial; borra los que no quieras y deja las comas sin espacios.
+Cambia `192.168.0.x` por la IP del TV y `1234` por el PIN del cliente.
 
 **Mac** (app Terminal):
 ```bash
-curl -fsSL https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.sh | bash -s -- 192.168.1.50 1234 paisajes
+curl -fsSL https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.sh | bash -s -- 192.168.0.x 1234 real-madrid,navidad,terror,american-sports,autos,animales,mar,barcos,espacio,paisajes
 ```
 
 **Windows** (PowerShell normal, sin administrador; es una sola línea):
 ```powershell
-$IP='192.168.1.50'; $PIN='1234'; $THEME='paisajes'; [Net.ServicePointManager]::SecurityProtocol='Tls12'; irm https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.ps1 | iex
+$IP='192.168.0.x'; $PIN='1234'; $THEME='real-madrid,navidad,terror,american-sports,autos,animales,mar,barcos,espacio,paisajes'; [Net.ServicePointManager]::SecurityProtocol='Tls12'; irm https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.ps1 | iex
+```
+
+| Nombre en la línea | Botón Temas | Tipo |
+|---|---|---|
+| `real-madrid` | Real Madrid | personalizado (solo si está en la línea) |
+| `navidad` | Navidad | personalizado (solo si está en la línea) |
+| `terror` | Terror | incluido |
+| `american-sports` | Deportes americanos | incluido |
+| `autos` | Autos | incluido |
+| `animales` | Animales | incluido |
+| `mar` | Mar | incluido |
+| `barcos` | Barcos | incluido |
+| `espacio` | Espacio | incluido |
+| `paisajes` | Paisajes | incluido |
+
+`terror` antes se llamaba `halloween-terror`; ese nombre (y `halloween` / `horror`) sigue valiendo y da `terror`.
+Si el TV ya tenía la carpeta vieja `halloween-terror`, al repetir el instalador se cambia por `terror` (no quedan las dos).
+
+## 1. Qué le mandas al cliente
+
+1. El archivo **[CLIENTE.md](CLIENTE.md)** (o su texto), con los 4 pasos que verá.
+2. **La línea de su sistema**, ya con **su IP y su PIN** puestos (cambia `192.168.1.50` y `1234`). Trae todos los temas:
+   el primero es el inicial; borra los que no quieras y deja las comas sin espacios.
+
+**Mac** (app Terminal):
+```bash
+curl -fsSL https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.sh | bash -s -- 192.168.1.50 1234 real-madrid,navidad,terror,american-sports,autos,animales,mar,barcos,espacio,paisajes
+```
+
+**Windows** (PowerShell normal, sin administrador; es una sola línea):
+```powershell
+$IP='192.168.1.50'; $PIN='1234'; $THEME='real-madrid,navidad,terror,american-sports,autos,animales,mar,barcos,espacio,paisajes'; [Net.ServicePointManager]::SecurityProtocol='Tls12'; irm https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.ps1 | iex
 ```
 
 - **IP**: la del TV del cliente (ver abajo).
 - **PIN**: 4 números, protege Ajustes de Luk Home. En Windows **siempre entre comillas** (`'0123'`) para no perder ceros. Para no poner PIN: `sinpin`.
-- **Tema** (opcional): `paisajes`, `mar`, `espacio`, `autos`, `animales`, `barcos`, `american-sports`, `halloween-terror`,
-  o un tema personalizado (ver abajo; ya vienen `real-madrid` y `navidad`). En Mac va como 3.er valor; en Windows `$THEME='mar';` (o quítalo).
+- **Tema** (opcional): `paisajes`, `mar`, `espacio`, `autos`, `animales`, `barcos`, `american-sports`, `terror` (antes `halloween-terror`, que sigue valiendo),
+  o un tema personalizado (ver abajo; ya vienen `real-madrid` y `navidad`). En Mac va como 3.er valor; en Windows `$THEME='mar';` (o quítalo, y van todos los incluidos).
   - **Un solo nombre** (`mar`): van al TV **todos** los temas y `mar` queda como tema inicial.
   - **Una lista con comas, sin espacios** (`autos,mar,espacio`): van al TV **solo esos**; el **primero** es el inicial.
-    `todos` dentro de la lista agrega todos los incluidos (p. ej. `halloween-terror,todos`).
+    `todos` dentro de la lista agrega todos los incluidos (p. ej. `terror,todos`).
   - **Sin tema o `todos`**: todos los incluidos, como antes; si el TV ya tenía tema, se mantiene (si no, `paisajes`).
   - Si un nombre no existe, el instalador se detiene antes de tocar el TV y muestra los nombres válidos (antes caía a `paisajes`).
 
@@ -182,6 +214,11 @@ Los tres APK son compilaciones *debug* firmadas con la misma llave (necesario pa
 
 ## Cambios
 
+- **2026-11-01c:** El tema `halloween-terror` ahora se llama **`terror`** (botón Temas: "Terror"); mismas 10 fotos.
+  `halloween-terror`, `halloween` y `horror` siguen valiendo como nombres viejos y dan `terror`. Al repetir el instalador en
+  un TV que tenía la carpeta `halloween-terror`, se reemplaza por `terror` (no quedan las dos), el tema elegido en el TV pasa
+  a `terror` si era ese, y el registro `.instalador.txt` queda con el nombre nuevo. Las líneas para copiar (arriba y en el
+  paso 1) traen ahora **todos los temas** (`real-madrid,navidad,terror,…`) para borrar los que no se quieran. Los APK no cambian.
 - **2026-11-01b:** Dos temas personalizados nuevos (10 fondos cada uno, 1920×1080): `real-madrid` (Real Madrid) y
   `navidad` (Navidad). No están en `order.txt`: solo llegan a los TV cuya línea los nombra. **Botones solo íconos:** los
   tres botones de arriba a la derecha (Temas, red y Ajustes) ahora son círculos con solo el ícono, sin palabras, con un

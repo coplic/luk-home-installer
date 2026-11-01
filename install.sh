@@ -6,7 +6,8 @@
 #   <IP>    IP del Fire TV / Google TV (Ajustes > Mi Fire TV > Acerca de > Red)
 #   <PIN>   4 números para bloquear Ajustes (o "sinpin" para no poner PIN)
 #   [TEMA]  tema inicial (por defecto: paisajes), "todos", o una LISTA separada por comas
-#           (ej. autos,mar,halloween-terror): solo esos temas van al TV y el primero es el inicial.
+#           (ej. autos,mar,terror): solo esos temas van al TV y el primero es el inicial.
+#           Nombres viejos que siguen valiendo: halloween-terror / halloween / horror = terror.
 #           Temas: carpetas de bundle/themes/ (las de order.txt + temas personalizados de clientes).
 #
 # Opciones (después de la IP y el PIN):
@@ -31,6 +32,8 @@ main() {
   local STOCK_HOMES="com.amazon.tv.launcher com.google.android.apps.tv.launcherx com.google.android.tvlauncher com.android.tv.launcher android"
   # Servicios de accesibilidad de otros launchers que capturan el botón Inicio (se quitan; las apps NO se desinstalan).
   local LAUNCHER_SVC_PKGS="com.spocky.projengmenu com.wolf.firelauncher com.wolf.firelaunchermanager com.lauritz.homebutton com.appgenz.launchermanager"
+  # Temas renombrados "viejo:nuevo" (2026-11-01c: halloween-terror pasó a llamarse terror). Ver th_alias más abajo.
+  local TH_RENAMED="halloween-terror:terror" TH_RENAMED_OLD="halloween-terror"
 
   # ---------- argumentos ----------
   local IP="" PIN="" THEME="" THEME_GIVEN=0 DRY=0 NEW_DOCK=0 NOUPD="${LUK_NOUPDATE:-0}" a
@@ -340,6 +343,7 @@ PLEOF
   # solo van al TV si se nombran). Un tema = carpeta con fotos (jpg/png/webp) + name.txt (nombre en la pastilla Temas).
   thpics() { find "$BUNDLE/themes/$1" -maxdepth 1 -type f \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' -o -iname '*.webp' \) 2>/dev/null | wc -l | tr -d ' '; }
   okslug() { case "$1" in ''|-*|*[!a-z0-9_-]*) return 1 ;; esac; return 0; }
+  th_alias() { case "$1" in halloween-terror|halloween|horror) echo terror ;; *) echo "$1" ;; esac; }
   local TH_BUILTIN="" TH_CUSTOM="" TH_SEL="" TH_LIST=0 t d bad=""
   for t in $(grep -v '^#' "$BUNDLE/themes/order.txt" | tr -d '\r'); do
     okslug "$t" && [ "$(thpics "$t")" -gt 0 ] && TH_BUILTIN="$TH_BUILTIN $t"
@@ -349,6 +353,12 @@ PLEOF
     okslug "$t" && ! inlist "$t" "$TH_BUILTIN" && [ "$(thpics "$t")" -gt 0 ] && TH_CUSTOM="$TH_CUSTOM $t"
   done
   THEME=$(printf '%s' "$THEME" | tr 'A-Z' 'a-z' | tr -d ' \r')
+  # Nombres viejos de temas (alias): las líneas de antes siguen funcionando.
+  case "$THEME" in
+    *,*) local t2=""; for t in $(printf '%s' "$THEME" | tr ',' ' '); do t2="$t2,$(th_alias "$t")"; done
+         THEME="${t2#,}"; case "$THEME" in *,*) ;; *) THEME="$THEME," ;; esac ;;
+    *) THEME=$(th_alias "$THEME") ;;
+  esac
   case "$THEME" in
     *,*)   # lista: solo esos temas, en ese orden; el primero es el inicial
       TH_LIST=1
@@ -536,6 +546,17 @@ EOS
   else
     TH_KEEP="$TH_SEL"; for t in $TH_PREV; do inlist "$t" "$TH_KEEP" || ! inlist "$t" "$TV_THEMES" || TH_KEEP="$TH_KEEP $t"; done
   fi
+  # Temas renombrados (viejo:nuevo). Si el TV tiene la carpeta vieja (de un instalador o kit anterior), se borra:
+  # el tema nuevo ya va en la lista (o el cliente no lo quiere), y el registro .instalador.txt no la guarda más.
+  local TH_MIG="" TH_RM_MSG="$TH_RM" pr k2=""
+  for pr in $TH_RENAMED; do
+    inlist "${pr%%:*}" "$TV_THEMES" || continue
+    inlist "${pr%%:*}" "$TH_RM" || TH_RM="$TH_RM ${pr%%:*}"
+    if inlist "${pr#*:}" "$TH_SEL"; then TH_MIG="$TH_MIG ${pr%%:*}→${pr#*:}"; else k2="$k2 ${pr%%:*}"; fi
+  done
+  local TH_GONE="$k2"; k2=""
+  for t in $TH_RM_MSG; do inlist "$t" "$TH_RENAMED_OLD" || k2="$k2 $t"; done; TH_RM_MSG="$k2$TH_GONE"; k2=""
+  for t in $TH_KEEP; do inlist "$t" "$TH_RENAMED_OLD" || k2="$k2 $t"; done; TH_KEEP="${k2# }"
   printf '%s\n' $TH_KEEP > "$STAGE/themes/installed.txt"
   [ -n "$TH_RM" ] && printf '%s\n' $TH_RM > "$STAGE/themes/remove.txt"
   cp "$BUNDLE/tv-apply.sh" "$STAGE/tv-apply.sh"
@@ -557,10 +578,14 @@ EOS
     bien "Dock: $ndock app(s) en el inicio; las demás quedan en \"Otras apps\""
     [ -n "$missing" ] && aviso "No están instaladas (no van al dock):${missing#,}"
   fi
-  local CUR_THEME=""; [ "$HAS_THEME" = 1 ] && CUR_THEME=$(S run-as "$PKG" cat files/theme.txt | head -1)
-  if [ "$THEME_GIVEN" = 1 ] || [ "$HAS_THEME" = 0 ] || inlist "$CUR_THEME" "$TH_RM"; then printf '%s\n' "$THEME" > "$STAGE/theme.txt"; bien "Tema inicial: $(head -1 "$BUNDLE/themes/$THEME/name.txt" 2>/dev/null || echo "$THEME")"
+  local CUR_THEME=""; [ "$HAS_THEME" = 1 ] && CUR_THEME=$(S run-as "$PKG" cat files/theme.txt | head -1 | tr -d '\r')
+  local CUR_NEW=""; for pr in $TH_RENAMED; do [ "$CUR_THEME" = "${pr%%:*}" ] && CUR_NEW="${pr#*:}"; done
+  [ -n "$TH_MIG" ] && bien "Tema renombrado en el TV:$(printf '%s' "$TH_MIG" | sed 's/ /, /g; s/^,//') (se reemplaza la carpeta vieja)"
+  if [ "$THEME_GIVEN" = 0 ] && [ "$HAS_THEME" = 1 ] && [ -n "$CUR_NEW" ] && inlist "$CUR_NEW" "$TH_SEL"; then
+    printf '%s\n' "$CUR_NEW" > "$STAGE/theme.txt"; bien "Se mantiene el tema que ya tenía el TV, con su nombre nuevo: $(head -1 "$BUNDLE/themes/$CUR_NEW/name.txt" 2>/dev/null || echo "$CUR_NEW")"
+  elif [ "$THEME_GIVEN" = 1 ] || [ "$HAS_THEME" = 0 ] || inlist "$CUR_THEME" "$TH_RM"; then printf '%s\n' "$THEME" > "$STAGE/theme.txt"; bien "Tema inicial: $(head -1 "$BUNDLE/themes/$THEME/name.txt" 2>/dev/null || echo "$THEME")"
   else bien "Se mantiene el tema que ya tenía el TV"; fi
-  [ -n "$TH_RM" ] && bien "Se quitan del TV los temas que ya no van: $(printf '%s' "${TH_RM# }" | sed 's/ /, /g') (solo temas puestos por el instalador)"
+  [ -n "$TH_RM_MSG" ] && bien "Se quitan del TV los temas que ya no van: $(printf '%s' "${TH_RM_MSG# }" | sed 's/ /, /g') (solo temas puestos por el instalador)"
   [ -n "$PIN" ] && printf '%s\n' "$PIN_HASH" > "$STAGE/pin.txt"
   local nth njpg kb
   nth=$(grep -c . "$STAGE/themes/order.txt"); njpg=$(find "$STAGE/themes" -type f \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' -o -iname '*.webp' \) | wc -l | tr -d ' ')

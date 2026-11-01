@@ -3,7 +3,8 @@
 #   adb shell sh /data/local/tmp/lukhome/tv-apply.sh
 # Copies the files staged in /data/local/tmp/lukhome/ into Luk Home's private folder with run-as (debug build).
 # Writes only inside com.ivantrj.glasslauncher; never touches other apps or settings.
-# Theme folders listed in themes/remove.txt (old installer themes not in the client's list) are deleted.
+# Theme folders listed in themes/remove.txt (old installer themes not in the client's list, and old names of
+# renamed themes, e.g. halloween-terror -> terror since 2026-11-01c) are deleted.
 # Prints "LUK_APPLY_OK" on success, "LUK_APPLY_FAIL <what>" on failure, and always deletes the staging folder.
 P=com.ivantrj.glasslauncher
 D=${LUK_STAGE:-/data/local/tmp/lukhome}

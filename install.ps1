@@ -3,7 +3,8 @@
 #   $IP='192.168.1.50'; $PIN='1234'; [Net.ServicePointManager]::SecurityProtocol='Tls12'; irm https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.ps1 | iex
 #
 # Variables opcionales (antes de irm):  $THEME='mar'   $DRYRUN=1 (simulacion, no escribe en el TV)   $NUEVODOCK=1
-#   $THEME='autos,mar,halloween-terror'  lista: solo esos temas van al TV, el primero es el inicial ('todos' = todos)
+#   $THEME='autos,mar,terror'  lista: solo esos temas van al TV, el primero es el inicial ('todos' = todos)
+#   Nombres viejos que siguen valiendo: halloween-terror / halloween / horror = terror.
 #   $NOUPDATE=1  no revisar si hay version nueva de Stremio / IPTV Smarters / TizenTube
 # PIN: 4 numeros, o 'sinpin' para no poner PIN.
 # Solo modo "launcher": no borra ni desinstala ninguna app del cliente. Lo unico que toca de sus apps es
@@ -25,6 +26,9 @@
   $DOCK_APPS = @('com.stremio.one', 'com.nst.iptvsmarterstvbox', 'io.gh.reisxd.tizentube.cobalt')
   $STOCK_HOMES = @('com.amazon.tv.launcher', 'com.google.android.apps.tv.launcherx', 'com.google.android.tvlauncher', 'com.android.tv.launcher', 'android')
   $LAUNCHER_SVC_PKGS = @('com.spocky.projengmenu', 'com.wolf.firelauncher', 'com.wolf.firelaunchermanager', 'com.lauritz.homebutton', 'com.appgenz.launchermanager')
+  # Temas renombrados viejo -> nuevo (2026-11-01c: halloween-terror paso a llamarse terror) y alias aceptados en $THEME.
+  $TH_RENAMED = @{ 'halloween-terror' = 'terror' }
+  $TH_ALIAS = @{ 'halloween-terror' = 'terror'; 'halloween' = 'terror'; 'horror' = 'terror' }
 
   # Estado compartido (hashtable: las funciones internas lo modifican por referencia)
   $st = @{ adb = ''; serial = ''; accChanged = $false; homeChanged = $false; uopChanged = $false; success = $false
@@ -358,6 +362,7 @@
     $thBuiltin = @(Get-Content (Join-Path $bundle 'themes\order.txt') | ForEach-Object { $_.Trim() } | Where-Object { $_ -cmatch $slugRe -and (ThPics $_) -gt 0 })
     $thCustom = @(Get-ChildItem -Directory -Path (Join-Path $bundle 'themes') | ForEach-Object { $_.Name } | Where-Object { $_ -cmatch $slugRe -and $thBuiltin -notcontains $_ -and (ThPics $_) -gt 0 } | Sort-Object)
     $THEME = ($THEME.ToLower() -replace '\s', '')
+    $THEME = (($THEME -split ',') | ForEach-Object { if ($TH_ALIAS.ContainsKey($_)) { $TH_ALIAS[$_] } else { $_ } }) -join ','
     $sel = @(); $bad = @(); $thList = $false
     if ($THEME -match ',') {
       $thList = $true
@@ -512,6 +517,16 @@
     } else {
       foreach ($t in $thPrev) { if ($thKeep -notcontains $t -and $tvThemes -contains $t) { $thKeep += $t } }
     }
+    # Temas renombrados: si el TV tiene la carpeta vieja, se borra (el tema nuevo ya va en la lista, o no se quiere)
+    # y el registro .instalador.txt no la guarda mas.
+    $thMig = @(); $thRmMsg = @($thRm | Where-Object { -not $TH_RENAMED.ContainsKey($_) })
+    foreach ($o in $TH_RENAMED.Keys) {
+      if ($tvThemes -contains $o) {
+        if ($thRm -notcontains $o) { $thRm += $o }
+        if ($sel -contains $TH_RENAMED[$o]) { $thMig += "$o -> $($TH_RENAMED[$o])" } else { $thRmMsg += $o }
+      }
+    }
+    $thKeep = @($thKeep | Where-Object { -not $TH_RENAMED.ContainsKey($_) })
     WriteLF (Join-Path $st.stage 'themes\installed.txt') (($thKeep | ForEach-Object { "$_`n" }) -join '')
     if ($thRm.Count) { WriteLF (Join-Path $st.stage 'themes\remove.txt') (($thRm | ForEach-Object { "$_`n" }) -join '') }
     Copy-Item -Path (Join-Path $bundle 'tv-apply.sh') -Destination $st.stage
@@ -539,12 +554,19 @@
     }
     $wroteTheme = $false; $curTheme = ''
     if ($hasTheme) { $curTheme = ((S run-as $PKG cat files/theme.txt) -split "`n")[0].Trim() }
-    if ($themeGiven -or -not $hasTheme -or $thRm -contains $curTheme) {
+    if ($thMig.Count) { Bien ("Tema renombrado en el TV: " + ($thMig -join ', ') + " (se reemplaza la carpeta vieja)") }
+    $curNew = if ($curTheme -and $TH_RENAMED.ContainsKey($curTheme)) { $TH_RENAMED[$curTheme] } else { '' }
+    if (-not $themeGiven -and $hasTheme -and $curNew -and $sel -contains $curNew) {
+      WriteLF (Join-Path $st.stage 'theme.txt') "$curNew`n"; $wroteTheme = $true
+      $nf = Join-Path $bundle "themes\$curNew\name.txt"
+      Bien ("Se mantiene el tema que ya tenia el TV, con su nombre nuevo: " + $(if (Test-Path $nf) { ([IO.File]::ReadAllText($nf) -split "`n")[0].Trim() } else { $curNew }))
+    }
+    elseif ($themeGiven -or -not $hasTheme -or $thRm -contains $curTheme) {
       WriteLF (Join-Path $st.stage 'theme.txt') "$THEME`n"; $wroteTheme = $true
       $nf = Join-Path $bundle "themes\$THEME\name.txt"
       Bien ("Tema inicial: " + $(if (Test-Path $nf) { ([IO.File]::ReadAllText($nf) -split "`n")[0].Trim() } else { $THEME }))
     } else { Bien 'Se mantiene el tema que ya tenia el TV' }
-    if ($thRm.Count) { Bien ("Se quitan del TV los temas que ya no van: " + ($thRm -join ', ') + " (solo temas puestos por el instalador)") }
+    if ($thRmMsg.Count) { Bien ("Se quitan del TV los temas que ya no van: " + ($thRmMsg -join ', ') + " (solo temas puestos por el instalador)") }
     if ($PIN) { WriteLF (Join-Path $st.stage 'pin.txt') "$pinHash`n" }
     $njpg = @(Get-ChildItem -Recurse -File -Path (Join-Path $st.stage 'themes') | Where-Object { $_.Extension -match '^\.(jpe?g|png|webp)$' }).Count
     $kb = [int]((Get-ChildItem -Recurse -File -Path $st.stage | Measure-Object -Sum Length).Sum / 1024)
