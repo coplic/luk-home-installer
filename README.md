@@ -2,6 +2,8 @@
 
 Instala el launcher **Luk Home** en el Fire TV / Google TV de un cliente desde **su** computadora (Mac o Windows), con una sola línea.
 Modo **solo launcher**: no borra apps, no desinstala nada (tampoco Projectivy u otros launchers), no cambia ajustes de otras apps.
+Lo único que toca de las apps del cliente: si **Stremio, IPTV Smarters o TizenTube** ya están instaladas y hay una versión oficial
+**más nueva**, las actualiza con `adb install -r` (conserva datos y sesiones). Ver paso 8.
 
 ## 1. Qué le mandas al cliente
 
@@ -20,8 +22,24 @@ $IP='192.168.1.50'; $PIN='1234'; $THEME='paisajes'; [Net.ServicePointManager]::S
 
 - **IP**: la del TV del cliente (ver abajo).
 - **PIN**: 4 números, protege Ajustes de Luk Home. En Windows **siempre entre comillas** (`'0123'`) para no perder ceros. Para no poner PIN: `sinpin`.
-- **Tema** (opcional, por defecto `paisajes`): `paisajes`, `mar`, `espacio`, `autos`, `animales`, `barcos`, `american-sports`, `halloween-terror`.
-  En Mac va como 3.er valor; en Windows `$THEME='mar';` (o quítalo).
+- **Tema** (opcional): `paisajes`, `mar`, `espacio`, `autos`, `animales`, `barcos`, `american-sports`, `halloween-terror`,
+  o un tema personalizado (ver abajo). En Mac va como 3.er valor; en Windows `$THEME='mar';` (o quítalo).
+  - **Un solo nombre** (`mar`): van al TV **todos** los temas y `mar` queda como tema inicial.
+  - **Una lista con comas, sin espacios** (`autos,mar,espacio`): van al TV **solo esos**; el **primero** es el inicial.
+    `todos` dentro de la lista agrega todos los incluidos (p. ej. `halloween-terror,todos`).
+  - **Sin tema o `todos`**: todos los incluidos, como antes; si el TV ya tenía tema, se mantiene (si no, `paisajes`).
+  - Si un nombre no existe, el instalador se detiene antes de tocar el TV y muestra los nombres válidos (antes caía a `paisajes`).
+
+### Temas personalizados de un cliente
+
+1. Crea la carpeta `bundle/themes/<nombre>/` (nombre en minúsculas, solo `a-z 0-9 - _`, p. ej. `bundle/themes/taller-perez/`).
+2. Pon dentro las fotos (`.jpg`, `.png` o `.webp`; ideal 1920×1080, menos de ~1 MB cada una) y un `name.txt` con el nombre que
+   verá el cliente en el botón Temas (p. ej. `Taller Pérez`).
+3. **No** lo agregues a `order.txt` (así no les llega a los demás clientes). No hace falta tocar `SHA256SUMS`. Haz push.
+4. En la línea de ese cliente usa el nombre: `taller-perez` (sale primero, y además todos los incluidos) o
+   `taller-perez,mar,autos` (solo esos tres).
+
+Un tema personalizado solo llega a los TV en cuya línea aparece su nombre.
 
 Extras opcionales:
 
@@ -29,6 +47,7 @@ Extras opcionales:
 |---|---|---|
 | Probar sin cambiar nada en el TV | `--simular` (o `--dry-run`) | `$DRYRUN=1;` |
 | Rehacer el dock aunque ya exista | `--nuevo-dock` | `$NUEVODOCK=1;` |
+| No revisar actualizaciones de Stremio / IPTV Smarters / TizenTube | `--sin-actualizar` (o `LUK_NOUPDATE=1`) | `$NOUPDATE=1;` |
 
 > El PIN queda visible en la línea y en el historial de la terminal del cliente (aceptado). En el TV solo se guarda su hash SHA-256.
 
@@ -51,7 +70,7 @@ La computadora tiene que estar **en el mismo WiFi** que el TV.
 
 La primera vez el TV pregunta **"¿Permitir la depuración USB?"** → marcar "Permitir siempre" → **Permitir**. El script lo avisa y espera hasta 2 minutos.
 
-## 4. Qué hace el script (pasos 1–7)
+## 4. Qué hace el script (pasos 1–8)
 
 1. **Herramientas**: descarga las *platform-tools* oficiales de Google (`dl.google.com/android/repository/platform-tools-latest-{darwin,windows}.zip`) a una carpeta del usuario (se reutilizan en la siguiente vez) y el paquete de este repo (`github.com/coplic/luk-home-installer/archive/refs/heads/main.zip`, ~18 MB: APKs + temas + íconos). Comprueba los APK con `bundle/SHA256SUMS`.
 2. **Conexión**: `adb connect IP:5555`. Si el TV pide permiso, muestra el aviso grande y espera. Detecta TV apagado / IP equivocada / ADB apagado.
@@ -60,20 +79,40 @@ La primera vez el TV pregunta **"¿Permitir la depuración USB?"** → marcar "P
    - API 25–27 (Fire OS 6, Android 7.1) → `luk-home-fos6.apk` (en Fire OS 6 no hay `sha256sum`: reinstalla siempre, sin borrar datos)
    - API 28–29 (Fire OS 7) → `luk-home-fos7.apk`
    - API 30 o más (Fire OS 8, Google TV) → `luk-home.apk`
-5. **Archivos** dentro de Luk Home (solo su carpeta privada): los 8 temas, íconos personalizados de las apps instaladas, rotación de fondo cada 20 s, tema inicial, PIN y **dock** con solo Stremio, IPTV Smarters y TizenTube (las que estén instaladas; avisa cuáles faltan). Las demás apps quedan en "Otras apps".
+5. **Archivos** dentro de Luk Home (solo su carpeta privada): los temas elegidos, íconos personalizados de las apps instaladas, rotación de fondo cada 20 s, tema inicial, PIN y **dock** con solo Stremio, IPTV Smarters y TizenTube (las que estén instaladas; avisa cuáles faltan). Las demás apps quedan en "Otras apps".
 6. **Botón Inicio**: activa el servicio de accesibilidad de Luk Home. Si otro launcher (p. ej. Projectivy) tenía ese servicio, **solo se reemplaza su entrada** (la app no se toca ni se desinstala); otros servicios de accesibilidad se conservan. En Google TV con un launcher de terceros como inicio, pone Luk Home como inicio.
    **Fire OS 6 (API 25–27):** Amazon no deja correr servicios de accesibilidad de apps instaladas por fuera, así que ahí no se toca la accesibilidad: se da a Luk Home el **acceso de uso** (`appops set com.ivantrj.glasslauncher GET_USAGE_STATS allow`) y Luk Home vigila qué app está al frente.
-7. **Comprueba** ajustes, temas y PIN, abre Luk Home, pulsa Inicio y muestra **LISTO**.
+7. **Comprueba** ajustes, temas y PIN, abre Luk Home y pulsa Inicio.
+8. **Actualizaciones de apps** (se salta con `--sin-actualizar` / `$NOUPDATE=1`): solo **Stremio, IPTV Smarters y TizenTube**,
+   y solo si **ya están instaladas** (nunca instala una que falte). Compara el `versionCode` del TV con la última versión oficial:
+   - Stremio: APK de Android TV de `www.stremio.com/downloads` (`dl.strem.io`), sin versiones rc/beta.
+   - TizenTube: última release de `github.com/reisxd/TizenTubeCobalt` (`cobalt-arm.apk` / `cobalt-arm64.apk`, con su sha256).
+   - IPTV Smarters: `www.iptvsmarters.com` (copia oficial `www.smartersott.app`).
 
-Si algo falla después del paso 6, **devuelve los ajustes del botón Inicio (y el acceso de uso en Fire OS 6) como estaban** antes de salir.
+   Elige el APK de la misma arquitectura que la app instalada (armeabi-v7a / arm64-v8a) y comprueba que el `minSdk` del APK
+   sirva para el TV (Fire OS 6 = API 25). Solo actualiza con `adb install -r` si la oficial es **más nueva**; nunca desinstala,
+   baja de versión ni borra datos (las sesiones siguen). Si la app del TV vino de otra fuente (**firma distinta**, p. ej. la
+   de Play Store), avisa y la deja como está. Cualquier fallo (sin internet, sin espacio, no compatible) solo avisa y sigue.
+   Los APK descargados se guardan en la carpeta del instalador (`apps/`) para la próxima vez. Con `--simular` descarga y
+   compara, pero no instala. Al final muestra **LISTO** con una línea `Apps: …` (p. ej. `Stremio 1.9.12 → 1.10.4 · IPTV Smarters al día`).
+   El paso 8 corre cuando Luk Home ya quedó instalado y comprobado: si falla o se cancela, Luk Home queda bien igual.
+
+Si algo falla en los pasos 6–7, **devuelve los ajustes del botón Inicio (y el acceso de uso en Fire OS 6) como estaban** antes de salir.
 
 **Se puede repetir sin problema** (idempotente): no reinstala si ya está igual, **no pisa el dock** ni el tema que el cliente ya tenga (salvo `--nuevo-dock` o pasar un tema explícito), actualiza temas/íconos y el PIN.
+
+**Quitar temas al repetir:** el instalador anota en el TV qué temas puso (`files/themes/.instalador.txt`). Solo cuando se
+pasa una **lista** (`autos,mar`), borra del TV los temas que **ya no están en la lista** y que son del instalador (los
+incluidos en `order.txt`, los personalizados del paquete o los anotados en esa lista). Nunca borra otras carpetas ni otros
+archivos. Con un solo nombre, `todos` o sin tema no se borra nada (solo agrega). Si el tema que tenía el TV se borra,
+el primero de la lista queda como tema.
 
 ## 5. Dónde quedan respaldos y registros (en la computadora del cliente)
 
 | | Mac | Windows |
 |---|---|---|
 | Carpeta | `~/.luk-home/` | `%LOCALAPPDATA%\LukHome\` |
+| APK de actualizaciones (paso 8) | `apps/<app>/` | `apps\<app>\` |
 | Registro de cada corrida | `logs/instalacion-<ip>-<fecha>.log` | `logs\instalacion-<ip>-<fecha>.log` |
 | Respaldo previo | `respaldos/<ip>-<fecha>/antes.txt` (accesibilidad, inicio, versión), `paquetes.txt`, `dock-antes.txt` | igual |
 
@@ -94,6 +133,9 @@ El registro **no** contiene el PIN.
 | Fire TV 7: Inicio muestra el menú de Amazon un instante | Normal: Luk Home aparece a los ~5 s. |
 | Fire TV 6: Inicio muestra el menú de Amazon un instante | Normal: Luk Home vuelve en menos de 1 s. Después de reiniciar el TV, el inicio de Amazon se ve ~1 minuto y luego aparece Luk Home solo. |
 | Windows: "no se reconoce irm" / errores rojos de TLS | Usar **Windows PowerShell** (no CMD) y copiar la línea completa, incluido `[Net.ServicePointManager]...`. |
+| **firma distinta… NO se desinstala** (paso 8) | La app del TV vino de otra fuente (p. ej. Play Store). Se deja como está; se actualiza desde su tienda. |
+| **no se pudo descargar / consultar la última versión** (paso 8) | Sin internet o la página cambió. Luk Home quedó bien; se puede repetir o usar `--sin-actualizar`. |
+| **Tema no válido** | Revisar el nombre (minúsculas, sin espacios, separados por comas); el mensaje muestra los válidos. |
 | Mac: "xcrun"/"developer tools" | No hace falta; si macOS lo ofrece, se puede cancelar. Solo usa `curl`, `unzip` y `bash` del sistema. |
 
 Para casos raros, pedir al cliente el archivo `.log` de la carpeta de registros.
@@ -119,7 +161,8 @@ bundle/
   apks/luk-home-fos6.apk    Fire OS 6 (API 25-27)
   SHA256SUMS, VERSION
   tv-apply.sh               se ejecuta en el TV; copia los archivos dentro de Luk Home con run-as
-  themes/<8 temas>/ (10 JPG + name.txt) y order.txt
+  themes/<8 temas>/ (10 JPG + name.txt) y order.txt (temas incluidos para todos)
+  themes/<personalizado>/   temas de clientes (fotos + name.txt), fuera de order.txt
   tiles/<paquete>.png + .txt   íconos y nombres personalizados
   logo.png                  logo de la marca (Coplic), arriba a la derecha debajo de Temas/Ajustes
   rotate.txt                20 (segundos)
@@ -128,6 +171,14 @@ bundle/
 Los tres APK son compilaciones *debug* firmadas con la misma llave (necesario para `run-as`). Al actualizar un APK: reemplazarlo en `bundle/apks/`, regenerar `bundle/SHA256SUMS` (`cd bundle && shasum -a 256 apks/*.apk logo.png > SHA256SUMS`) y hacer push. GitHub puede tardar ~5 min en servir el archivo nuevo.
 
 ## Cambios
+
+- **2026-11-01a:** **Actualización de apps** (paso 8 nuevo): si Stremio, IPTV Smarters o TizenTube ya están instaladas y
+  hay una versión oficial más nueva, se actualizan con `adb install -r` (sin perder datos ni sesiones). Nunca instala apps
+  que falten, nunca desinstala ni baja de versión; con firma distinta solo avisa. Se salta con `--sin-actualizar` /
+  `$NOUPDATE=1`. Resumen `Apps: …` al final. **Temas por cliente:** el tema puede ser una lista (`autos,mar,espacio`:
+  solo esos, el primero es el inicial; `todos` = todos), y se pueden poner temas personalizados en `bundle/themes/<nombre>/`.
+  Un nombre de tema equivocado ahora da error con la lista de válidos (antes caía a `paisajes`). Al repetir con una lista,
+  se borran del TV solo los temas que puso el instalador y ya no van. Los APK de Luk Home no cambian.
 
 - **2026-10-31d:** Soporte para **Fire OS 6** (API 25–27; p. ej. Fire TV Stick 4K de 1.a generación "AFTMM"). Nuevo
   `bundle/apks/luk-home-fos6.apk` (mismo Luk Home: dock, fondos que rotan, 8 temas, íconos, logo, PIN). En Fire OS 6

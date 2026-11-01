@@ -3,6 +3,7 @@
 #   adb shell sh /data/local/tmp/lukhome/tv-apply.sh
 # Copies the files staged in /data/local/tmp/lukhome/ into Luk Home's private folder with run-as (debug build).
 # Writes only inside com.ivantrj.glasslauncher; never touches other apps or settings.
+# Theme folders listed in themes/remove.txt (old installer themes not in the client's list) are deleted.
 # Prints "LUK_APPLY_OK" on success, "LUK_APPLY_FAIL <what>" on failure, and always deletes the staging folder.
 P=com.ivantrj.glasslauncher
 D=${LUK_STAGE:-/data/local/tmp/lukhome}
@@ -27,8 +28,24 @@ if [ -f "$D/themes/order.txt" ]; then
     n=$((n + 1))
   done < "$D/themes/order.txt"
   put "$D/themes/order.txt" themes/order.txt
+  # list of the themes the installer has put on this TV (used on reruns to know what it may remove)
+  [ -f "$D/themes/installed.txt" ] && put "$D/themes/installed.txt" themes/.instalador.txt
 fi
 echo "THEMES $n"
+
+# remove.txt: theme folders the installer put here earlier and that are no longer in the client's list.
+# Only plain theme slugs, never one that is in order.txt, never anything outside files/themes/.
+r=0
+if [ -f "$D/themes/remove.txt" ] && [ -f "$D/themes/order.txt" ]; then
+  while read -r t; do
+    case "$t" in ''|-*|*[!a-z0-9_-]*) continue ;; esac
+    keep=0
+    while read -r o; do [ "$o" = "$t" ] && keep=1; done < "$D/themes/order.txt"
+    [ "$keep" = 1 ] && continue
+    run-as $P rm -rf "files/themes/$t" </dev/null && r=$((r + 1))
+  done < "$D/themes/remove.txt"
+fi
+echo "REMOVED $r"
 
 k=0
 for f in "$D"/tiles/*; do
