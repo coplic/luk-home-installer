@@ -170,7 +170,7 @@ Nombres que entiende (sirven en Fire TV y en Google TV / onn; mayúsculas, espac
 - Si el TV ya tenía su fila de inicio, se **conserva** y las apps nuevas se agregan al final (las que ya estaban no se repiten).
   Con --nuevo-dock (Windows $NUEVODOCK=1;) se rehace: Stremio, IPTV Smarters, TizenTube + las de APPS.
 - Una app **desactivada** en el TV se salta con aviso. Máximo 20 apps en la fila.
-- Las apps sin ícono propio de Luk Home salen con el mismo **marco con estilo** (franjas + brillo) y su ícono real en el centro.
+- Las apps sin ícono propio de Luk Home salen con el **marco con estilo** (franjas, brillo y reflejo) en un **color distinto** al de los demás tiles del inicio, y en la burbuja redonda solo el logo de la app, sin el cuadrito de fondo de su ícono.
 
 > El PIN queda visible en la línea y en el historial de la terminal del cliente (aceptado). En el TV solo se guarda su hash SHA-256.
 
@@ -294,6 +294,31 @@ bundle/
 Los tres APK son compilaciones *debug* firmadas con la misma llave (necesario para `run-as`). Al actualizar un APK: reemplazarlo en `bundle/apks/`, regenerar `bundle/SHA256SUMS` (`cd bundle && shasum -a 256 apks/*.apk logo.png > SHA256SUMS`) y hacer push. GitHub puede tardar ~5 min en servir el archivo nuevo.
 
 ## Cambios
+
+- **2026-11-01h:** **Cada tile de un color distinto.** Las apps del dock sin tile propio ya no toman el color de su
+  ícono tal cual (Prime Video, Kodi y Surfshark salían del mismo azul/turquesa): ahora salen de una paleta de
+  degradados (naranja, amarillo, lima, verde, turquesa, celeste, azul, índigo, morado, magenta, rosa, rojo y plateado).
+  Los tiles propios conservan su color y reservan el de la paleta más parecido (Películas y Series naranja, Movies & TV
+  verde, YouTube Premium morado, Live TV azul, YouTube rojo); las demás apps se reparten los colores libres de modo que
+  ningún color se repite y los más parecidos del inicio queden lo más distintos posible a la vista (más aún entre
+  vecinos). Siempre el mismo color para el mismo dock. En la TV de la sala: Prime Video rosa, HBO Max plateado, Kodi
+  magenta, Surfshark lima. El resto igual que 11-01g (franjas, brillo, reflejo, logo sin su fondo). APK nuevos (misma
+  firma; se conservan dock, PIN y temas): `luk-home.apk` `881a1feb…dc73fd4d`, `luk-home-fos7.apk` `c4f7e71e…2122a481`, `luk-home-fos6.apk` `f9bcb94f…cc631cb9`.
+
+- **2026-11-01g:** **Vuelve el marco con estilo; el logo sin su fondo.** Se deshace lo transparente de 11-01f: las apps del
+  dock sin tile propio vuelven a tener el fondo de color, las franjas, el brillo y el reflejo de 11-01e. Lo único que
+  cambia es dentro de la burbuja redonda: ya no sale el cuadrito de fondo del ícono de la app (p. ej. el azul oscuro/negro
+  de HBO Max, el azul de Prime Video o de Surfshark), solo el logo/las letras con una sombra suave. Íconos adaptativos:
+  se usa la capa del logo; íconos normales: se borra el color plano o degradado del borde; si no se puede separar bien,
+  el ícono se recorta en círculo. Los tiles propios no cambian. APK nuevos (misma firma; se conservan dock, PIN y temas):
+  `luk-home.apk` `27335e20…e2314e86`, `luk-home-fos7.apk` `2d5cce7b…c94d976c`, `luk-home-fos6.apk` `4e3ddfb8…163d6649`.
+
+- **2026-11-01f:** **Apps sin tile propio, ahora transparentes.** *(revertido en 11-01g)* Las apps del dock que no traen tile propio (p. ej. Prime Video,
+  HBO Max, Kodi) ya no llevan fondo de color ni franjas: el tile es transparente y solo se ve la burbuja redonda con el logo
+  de la app dentro (el logo tal cual) y su nombre debajo. Al seleccionarla se agranda y sale el recuadro de cristal, como
+  las demás. Los tiles propios (Stremio, Smarters, TizenTube y los de `files/tiles/`) no cambian. Se apaga con `off` en
+  `files/tiles-style.txt`. APK nuevos (misma firma; se conservan dock, PIN y temas):
+  `luk-home.apk` `3b4d48ce…f28753de`, `luk-home-fos7.apk` `56248788…37d999d8`, `luk-home-fos6.apk` `beb5f2e7…34d23d05`.
 
 - **2026-11-01e:** **Apps extra en el inicio** (APPS, 5.º valor / `--apps` / `APPS=`; Windows `$APPS='netflix,youtube';`):
   nombres fáciles (Fire TV y Google TV), nombre de paquete o `todas`; van después de Stremio / IPTV Smarters / TizenTube,
