@@ -61,6 +61,11 @@ $IP='192.168.1.50'; $PIN='1234'; $THEME='real-madrid,navidad,terror,american-spo
     `todos` dentro de la lista agrega todos los incluidos (p. ej. `terror,todos`).
   - **Sin tema o `todos`**: todos los incluidos, como antes; si el TV ya tenía tema, se mantiene (si no, `paisajes`).
   - Si un nombre no existe, el instalador se detiene antes de tocar el TV y muestra los nombres válidos (antes caía a `paisajes`).
+  - **`aleatorio`** o **`rotar`** (solos, o **al principio** de la lista): el TV arranca en ese modo del botón Temas.
+    `aleatorio` = fotos de **todos** los temas del TV, mezcladas (cambia de foto cada 20 s).
+    `rotar` = un tema completo cada **hora**, en el orden del menú (dentro del tema las fotos siguen cambiando cada 20 s).
+    Ejemplos: `aleatorio` (todos los temas incluidos + modo Aleatorio), `rotar,real-madrid,navidad,mar` (solo esos tres, rotando).
+    El cliente lo puede cambiar después desde el botón Temas (filas **Aleatorio** y **Rotar temas**, al final del menú).
 
 ### Temas personalizados de un cliente
 
@@ -90,6 +95,82 @@ Extras opcionales:
 | Probar sin cambiar nada en el TV | `--simular` (o `--dry-run`) | `$DRYRUN=1;` |
 | Rehacer el dock aunque ya exista | `--nuevo-dock` | `$NUEVODOCK=1;` |
 | No revisar actualizaciones de Stremio / IPTV Smarters / TizenTube | `--sin-actualizar` (o `LUK_NOUPDATE=1`) | `$NOUPDATE=1;` |
+| Ciudad del tiempo (ver abajo) | 4.º valor después del tema, o `CIUDAD="Miami"` antes de `bash` | `$CIUDAD='Miami';` |
+| Apps extra en el inicio (ver abajo) | 5.º valor, o `--apps netflix,youtube`, o `APPS=netflix,youtube` antes de `bash` | `$APPS='netflix,youtube';` |
+
+### Tiempo en vivo (botón del clima)
+
+Luk Home muestra arriba a la derecha, antes de Temas, un botón con el ícono del clima y la temperatura (`79°`). Al pulsarlo
+abre una tarjeta en español: ciudad, temperatura, condición, sensación térmica, calidad del aire, los próximos 3 días y el
+botón **Cambiar ciudad** (lista de ciudades o **Buscar ciudad…** con el teclado del TV). Datos de **Open-Meteo** (gratis, sin
+cuenta); se actualiza cada 30 minutos y al volver la conexión. °F en EE. UU., °C en el resto. Sin internet muestra el último
+dato guardado (o solo el ícono) sin mensajes de error.
+
+Por defecto la ciudad es **automática** (por la IP de internet del cliente). Para fijarla desde el instalador (opcional):
+
+- **Mac:** 4.º valor después del tema (usa `todos` si no quieres elegir tema), entre comillas si lleva espacios:
+  ```bash
+  curl -fsSL https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.sh | bash -s -- 192.168.0.x 1234 todos "Miami"
+  ```
+  o con variable: `curl -fsSL …/install.sh | CIUDAD="Madrid, España" bash -s -- 192.168.0.x 1234`
+- **Windows:** agrega `$CIUDAD='Miami';` antes de `irm` (p. ej. `$IP='192.168.0.x'; $PIN='1234'; $CIUDAD='Miami'; …`).
+- Valores: un nombre (`Miami`, `Madrid, España`, `Ciudad de México`), coordenadas `25.76,-80.19`, o `auto` (volver a automática).
+- Sin CIUDAD el instalador no toca la ciudad que el cliente ya eligió en el TV. Con CIUDAD se conserva la línea `unidad=F` / `unidad=C` si el TV ya la tenía.
+
+### Apps extra en el inicio (APPS, opcional)
+
+Pon en la fila de inicio otras apps **que el cliente ya tiene instaladas** (el instalador nunca instala, quita ni actualiza
+apps por esto). Van **después** de Stremio, IPTV Smarters y TizenTube, en el orden que escribas, sin repetir.
+Nombres separados por comas, **sin espacios**. Si una app no está en el TV, se salta y avisa (no se detiene).
+
+En Mac es el **5.º valor**: IP, PIN, TEMA, CIUDAD, APPS. Si no quieres cambiar el tema pon todos; para la ciudad pon auto
+(automática) o - (no tocar la ciudad).
+
+Mac (app Terminal), línea lista para copiar:
+
+curl -fsSL https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.sh | bash -s -- 10.0.0.250 1234 real-madrid auto netflix,youtube,disney
+
+Windows (PowerShell), línea lista para copiar:
+
+$IP='10.0.0.250'; $PIN='1234'; $THEME='real-madrid'; $CIUDAD='auto'; $APPS='netflix,youtube,disney'; [Net.ServicePointManager]::SecurityProtocol='Tls12'; irm https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.ps1 | iex
+
+Con todos los temas y apps extra (Mac y Windows):
+
+curl -fsSL https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.sh | bash -s -- 192.168.0.x 1234 real-madrid,navidad,terror,american-sports,autos,animales,mar,barcos,espacio,paisajes - netflix,youtube,disney
+
+$IP='192.168.0.x'; $PIN='1234'; $THEME='real-madrid,navidad,terror,american-sports,autos,animales,mar,barcos,espacio,paisajes'; $APPS='netflix,youtube,disney'; [Net.ServicePointManager]::SecurityProtocol='Tls12'; irm https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.ps1 | iex
+
+Nombres que entiende (sirven en Fire TV y en Google TV / onn; mayúsculas, espacios, guiones y "+" dan igual):
+
+| Nombre | App |
+|---|---|
+| netflix | Netflix |
+| youtube (yt) | YouTube |
+| youtubetv, youtubekids, youtubemusic | YouTube TV / Kids / Music |
+| smarttube | SmartTube |
+| prime (primevideo) | Prime Video |
+| disney (disneyplus) | Disney+ |
+| hulu | Hulu |
+| max (hbomax, hbo) | Max |
+| paramount (paramountplus) | Paramount+ |
+| peacock | Peacock |
+| appletv | Apple TV |
+| spotify | Spotify |
+| pluto (plutotv), tubi | Pluto TV, Tubi |
+| plex, kodi, vlc | Plex, Kodi, VLC |
+| espn, fubo, sling, dazn, directv, philo, starz | deportes / TV en vivo |
+| vix, telemundo, crunchyroll, twitch | ViX, Telemundo, Crunchyroll, Twitch |
+| downloader, silk | Downloader, navegador Silk |
+| stremio, smarters, tizentube, nuvio | (las del dock normal; sirven para cambiar el orden) |
+| tivimate, xciptv, perfectplayer, ottnavigator, mxplayer | reproductores IPTV / video |
+| todas (o all) | todas las apps del cliente que se pueden abrir |
+
+- También vale el **nombre del paquete** (lleva un punto), p. ej. com.disney.disneyplus.
+- Si el nombre no está en la tabla, busca una app instalada cuyo paquete se parezca (p. ej. pandora).
+- Si el TV ya tenía su fila de inicio, se **conserva** y las apps nuevas se agregan al final (las que ya estaban no se repiten).
+  Con --nuevo-dock (Windows $NUEVODOCK=1;) se rehace: Stremio, IPTV Smarters, TizenTube + las de APPS.
+- Una app **desactivada** en el TV se salta con aviso. Máximo 20 apps en la fila.
+- Las apps sin ícono propio de Luk Home salen con el mismo **marco con estilo** (franjas + brillo) y su ícono real en el centro.
 
 > El PIN queda visible en la línea y en el historial de la terminal del cliente (aceptado). En el TV solo se guarda su hash SHA-256.
 
@@ -214,6 +295,26 @@ Los tres APK son compilaciones *debug* firmadas con la misma llave (necesario pa
 
 ## Cambios
 
+- **2026-11-01e:** **Apps extra en el inicio** (APPS, 5.º valor / `--apps` / `APPS=`; Windows `$APPS='netflix,youtube';`):
+  nombres fáciles (Fire TV y Google TV), nombre de paquete o `todas`; van después de Stremio / IPTV Smarters / TizenTube,
+  sin repetir; las que falten se saltan con aviso. No instala ni quita apps. CIUDAD acepta `-` para no tocarla.
+  **Marco con estilo**: las apps del dock sin tile propio salen con el mismo marco (franjas, brillo y reflejo) y su ícono real
+  en el centro (sin cambiar el ícono). Se apaga con `off` en `files/tiles-style.txt` del TV.
+  **Botón Temas**: dos filas nuevas al final, **Aleatorio** (fotos de todos los temas mezcladas, cada 20 s) y **Rotar temas**
+  (un tema completo cada hora, en orden; cada 20 s cambia la foto dentro del tema). Se guardan como un tema normal (siguen
+  tras reiniciar). Minutos por tema en `files/theme-rotate.txt` (5–10080, por defecto 60). El instalador los pone con
+  `aleatorio` o `rotar` como tema (solos o primero en la lista). APK nuevos (misma firma; se conservan dock, PIN y temas):
+  `luk-home.apk` `7c2bea28…47f7e8db`, `luk-home-fos7.apk` `fbc3c149…5952f8f9`, `luk-home-fos6.apk` `7845cd3c…5568314f`.
+
+- **2026-11-01d:** **Tiempo en vivo.** Nuevo botón del clima arriba a la derecha (ícono + temperatura, p. ej. `79°`), antes de
+  Temas / red / Ajustes. Al pulsarlo abre una tarjeta (fondo azul grisáceo): ciudad en mayúsculas, temperatura grande,
+  condición, "Sensación", calidad del aire (AQI), 3 días, botón blanco **Cambiar ciudad** y "Actualizado h:mm · Open-Meteo".
+  Datos de Open-Meteo sin clave; ciudad automática por IP o elegida en el TV (lista o **Buscar ciudad…**); °F en EE. UU., °C
+  en el resto; se refresca cada 30 min y al volver la conexión; sin internet muestra lo último guardado sin errores.
+  **CIUDAD opcional** en el instalador (4.º valor o `CIUDAD=` en Mac, `$CIUDAD=` en Windows) → `files/weather.txt`.
+  Luk Home pide ahora el permiso INTERNET (solo para el tiempo). Nuevos `luk-home.apk`, `luk-home-fos7.apk` y
+  `luk-home-fos6.apk` (misma firma: se conservan dock, PIN y temas): `11c80769…74a40191`,
+  `edd18dbc…140b328d`, `7571de10…aa70f1e1` (ver `bundle/SHA256SUMS`).
 - **2026-11-01c:** El tema `halloween-terror` ahora se llama **`terror`** (botón Temas: "Terror"); mismas 10 fotos.
   `halloween-terror`, `halloween` y `horror` siguen valiendo como nombres viejos y dan `terror`. Al repetir el instalador en
   un TV que tenía la carpeta `halloween-terror`, se reemplaza por `terror` (no quedan las dos), el tema elegido en el TV pasa

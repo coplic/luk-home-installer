@@ -56,7 +56,14 @@ for f in "$D"/tiles/*; do
 done
 echo "TILEFILES $k"
 
-for x in rotate.txt dock.txt theme.txt logo.png; do
+# weather.txt (city of the weather pill): keep a unidad=/unit= line (°C/°F) the TV already had.
+if [ -f "$D/weather.txt" ]; then
+  run-as $P cat files/weather.txt </dev/null 2>/dev/null | while read -r l; do
+    case "$l" in unidad=*|unit=*|UNIDAD=*|Unidad=*) printf '%s\n' "$l" ;; esac
+  done > "$D/weather.keep" 2>/dev/null
+  [ -s "$D/weather.keep" ] && cat "$D/weather.keep" >> "$D/weather.txt"
+fi
+for x in rotate.txt dock.txt theme.txt logo.png weather.txt; do
   if [ -f "$D/$x" ]; then put "$D/$x" "$x"; echo "WROTE $x"; fi
 done
 if [ -f "$D/pin.txt" ]; then

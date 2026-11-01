@@ -4,8 +4,15 @@
 #
 # Variables opcionales (antes de irm):  $THEME='mar'   $DRYRUN=1 (simulacion, no escribe en el TV)   $NUEVODOCK=1
 #   $THEME='autos,mar,terror'  lista: solo esos temas van al TV, el primero es el inicial ('todos' = todos)
+#   $THEME='aleatorio' o 'rotar' (o al principio de la lista: 'rotar,mar,autos'): modos del menu Temas.
+#                aleatorio = fotos de todos los temas mezcladas; rotar = un tema completo cada hora
 #   Nombres viejos que siguen valiendo: halloween-terror / halloween / horror = terror.
 #   $NOUPDATE=1  no revisar si hay version nueva de Stremio / IPTV Smarters / TizenTube
+#   $CIUDAD='Miami'  ciudad del boton del tiempo (arriba a la derecha): 'Madrid, Espana', '25.76,-80.19' o 'auto'
+#                (por internet, segun la IP). Sin $CIUDAD el TV se queda con la que tenga (al principio: auto).
+#   $APPS='netflix,youtube,disney'  apps del cliente que tambien van al inicio, despues de Stremio / IPTV Smarters /
+#                TizenTube (o el paquete exacto, ej. com.netflix.ninja; 'todas' = todas las que ya tiene). Las que no
+#                esten instaladas se saltan con un aviso. Si el TV ya tenia dock, se agregan al final. No instala nada.
 # PIN: 4 numeros, o 'sinpin' para no poner PIN.
 # Solo modo "launcher": no borra ni desinstala ninguna app del cliente. Lo unico que toca de sus apps es
 # actualizar (adb install -r, conserva datos y sesiones) Stremio / IPTV Smarters / TizenTube si ya estan
@@ -14,7 +21,7 @@
 # (Este archivo es solo ASCII a proposito: asi se lee igual en cualquier consola de Windows.)
 
 & {
-  param($IP, $PIN, $THEME, $DRYRUN, $NUEVODOCK, $BURL, $ADBOVR, $HOMEDIR, $NOUPDATE)
+  param($IP, $PIN, $THEME, $DRYRUN, $NUEVODOCK, $BURL, $ADBOVR, $HOMEDIR, $NOUPDATE, $CIUDAD, $APPS)
 
   $ErrorActionPreference = 'Stop'
   $ProgressPreference = 'SilentlyContinue'
@@ -39,6 +46,16 @@
   $dry = [bool]$DRYRUN -and "$DRYRUN" -ne '0'
   $newDock = [bool]$NUEVODOCK -and "$NUEVODOCK" -ne '0'
   $noUpd = [bool]$NOUPDATE -and "$NOUPDATE" -ne '0'
+  # Ciudad del tiempo (files/weather.txt): una linea, max. 80 caracteres; auto/automatica/ip = por internet
+  $city = ("$CIUDAD" -replace "[`r`n`t]", ' ').Trim()
+  if ($city.Length -gt 80) { $city = $city.Substring(0, 80).Trim() }
+  if (@('auto', 'automatica', 'ip', 'internet') -contains $city.ToLower().Replace([string][char]0xE1, 'a')) { $city = 'auto' }
+  # '-' / 'igual' / 'nada' = no cambiar la ciudad
+  if (@('-', '_', 'igual', 'nada', 'ninguna', 'sin', 'no') -contains $city.ToLower()) { $city = '' }
+  # Apps extra para el inicio: nombres separados por comas (netflix,youtube) o paquetes exactos; 'todas' = todas
+  $appsArg = (("$APPS" -replace '\s', '') -replace ';', ',').Trim(',')
+  if (@('-', 'no', 'ninguna', 'nada') -contains $appsArg.ToLower()) { $appsArg = '' }
+  $extraPkgs = @(); $extraNames = @{}; $launchable = @(); $third = @(); $disabled = @()
 
   $work = if ($HOMEDIR) { "$HOMEDIR" } else { Join-Path $env:LOCALAPPDATA 'LukHome' }
   New-Item -ItemType Directory -Force -Path (Join-Path $work 'logs') | Out-Null
@@ -54,6 +71,117 @@
   function Aviso([string]$m) { Say "   !   $m" 'Yellow' }
   function Sim([string]$m) { Say "   [simulacion] $m" 'Yellow' }
   function Falla([string]$m, [string]$hint = '') { throw "LUKFAIL|$m|$hint" }
+
+  # ---------- apps extra en el inicio ($APPS) ----------
+  # Solo cambia la lista del dock de Luk Home (files/dock.txt). Nunca instala, desinstala, actualiza ni borra
+  # datos de ninguna app. Nombres comunes -> paquetes (se usa el primero instalado); con punto = paquete exacto.
+  $APP_MAP = [ordered]@{
+    'netflix' = @('com.netflix.ninja', 'com.netflix.mediaclient')
+    'youtube|yt' = @('com.amazon.firetv.youtube', 'com.google.android.youtube.tv', 'com.google.android.youtube.tvunplugged.youtube', 'com.google.android.youtube')
+    'youtubetv|yttv' = @('com.amazon.firetv.youtube.tv', 'com.google.android.youtube.tvunplugged')
+    'youtubekids|ytkids' = @('com.amazon.firetv.youtube.kids', 'com.google.android.youtube.tvkids', 'com.google.android.apps.youtube.kids')
+    'youtubemusic|ytmusic' = @('com.google.android.youtube.tvmusic', 'com.google.android.apps.youtube.music')
+    'smarttube' = @('org.smarttube.stable', 'org.smarttube.beta', 'com.teamsmart.videomanager.tv', 'com.liskovsoft.smarttubetv.beta', 'com.liskovsoft.smarttubetv')
+    'prime|primevideo|amazonprime|amazonvideo|amazonprimevideo' = @('com.amazon.avod', 'com.amazon.amazonvideo.livingroom', 'com.amazon.firebat', 'com.amazon.avod.thirdpartyclient')
+    'disney|disneyplus' = @('com.disney.disneyplus')
+    'hulu' = @('com.hulu.livingroomplus', 'com.hulu.plus')
+    'max|hbomax|hbo' = @('com.wbd.stream', 'com.hbo.hbonow', 'com.hbo.max')
+    'paramount|paramountplus' = @('com.cbs.ott', 'com.cbs.app')
+    'peacock' = @('com.peacock.peacockfiretv', 'com.peacocktv.peacockandroid')
+    'appletv' = @('com.apple.atve.amazon.appletv', 'com.apple.atve.androidtv.appletv', 'com.apple.atve.sony.appletv')
+    'spotify' = @('com.spotify.tv.android', 'com.spotify.music')
+    'pluto|plutotv' = @('tv.pluto.android')
+    'tubi|tubitv' = @('com.tubitv', 'com.tubitv.ott')
+    'plex' = @('com.plexapp.android')
+    'kodi' = @('org.xbmc.kodi')
+    'vlc' = @('org.videolan.vlc')
+    'espn' = @('com.espn.gtv', 'com.espn.score_center')
+    'fubo|fubotv' = @('com.fubo.firetv.screen', 'com.fubotv.android', 'com.fubo.android')
+    'sling|slingtv' = @('com.sling')
+    'downloader' = @('com.esaba.downloader')
+    'stremio' = @('com.stremio.one')
+    'smarters|iptvsmarters' = @('com.nst.iptvsmarterstvbox')
+    'tizentube' = @('io.gh.reisxd.tizentube.cobalt')
+    'tivimate' = @('ar.tvplayer.tv')
+    'xciptv' = @('com.nathnetwork.xciptv')
+    'nuvio' = @('com.nuvio.tv')
+    'crunchyroll' = @('com.crunchyroll.crunchyroid')
+    'dazn' = @('com.dazn')
+    'twitch' = @('tv.twitch.android.viewer', 'tv.twitch.android.app')
+    'vix' = @('com.univision.prendetv')
+    'mxplayer|mx' = @('com.mxtech.videoplayer.ad', 'com.mxtech.videoplayer.pro', 'com.mxtech.videoplayer.television')
+    'perfectplayer' = @('com.niklabs.pp')
+    'ottnavigator' = @('studio.scillarium.ottnavigator')
+    'silk' = @('com.amazon.cloud9')
+    'starz' = @('com.bydeluxe.d3.android.program.starz')
+    'philo' = @('com.philo.philo.google', 'com.philo.philo')
+    'directv|directvstream' = @('com.att.tv', 'com.directv.dtvlatam')
+    'telemundo' = @('com.telemundo.android.telemundoapp', 'com.nbcuni.telemundo.noticiastelemundo')
+  }
+  function AppNorm([string]$x) {
+    $y = $x.ToLower() -replace '[+ _-]', ''
+    foreach ($pr in @(@(0xF3, 'o'), @(0xE9, 'e'), @(0xED, 'i'), @(0xE1, 'a'), @(0xFA, 'u'))) { $y = $y.Replace([string][char]$pr[0], $pr[1]) }
+    $y
+  }
+  function AppCands([string]$n) {
+    foreach ($k in $APP_MAP.Keys) { if (($k -split '\|') -contains $n) { return @($APP_MAP[$k]) } }
+    @()
+  }
+  function AppLaunch([string]$p) { ($launchable.Count -eq 0) -or ($launchable -contains $p) }
+  function AppResolve([string]$x) {   # -> @{ pkg; why }
+    if ($x -match '\.') {
+      if ($disabled -contains $x) { return @{ pkg = ''; why = 'esta desactivada en el TV' } }
+      if ($installed -contains $x) {
+        if (AppLaunch $x) { return @{ pkg = $x; why = '' } }
+        return @{ pkg = ''; why = 'esta instalada pero no se abre desde el inicio' }
+      }
+      return @{ pkg = ''; why = 'no esta instalada' }
+    }
+    $n = AppNorm $x; $inst = ''; $dis = ''
+    foreach ($c in (AppCands $n)) {
+      if ($installed -notcontains $c) { continue }
+      if ($disabled -contains $c) { $dis = $c; continue }
+      $inst = $c; if (AppLaunch $c) { return @{ pkg = $c; why = '' } }
+    }
+    if ($inst) { return @{ pkg = ''; why = "esta instalada ($inst) pero no se abre desde el inicio" } }
+    if ($dis) { return @{ pkg = ''; why = "esta desactivada en el TV ($dis); no se activa" } }
+    if ($n.Length -ge 3) {   # busqueda aproximada por nombre de paquete
+      $pool = if ($launchable.Count) { $launchable } else { $installed }
+      $m = @($pool | Where-Object { $_ -ne $PKG -and (($_.ToLower() -replace '[._]', '').Contains($n)) })
+      if ($m.Count -eq 1) { return @{ pkg = $m[0]; why = '' } }
+      $m3 = @($m | Where-Object { $third -contains $_ })
+      if ($m3.Count -eq 1) { return @{ pkg = $m3[0]; why = '' } }
+      if ($m.Count -gt 1) { return @{ pkg = ''; why = ("hay varias que se parecen: " + ($m -join ', ') + ". Escribe el nombre del paquete exacto") } }
+    }
+    @{ pkg = ''; why = 'no esta instalada' }
+  }
+  function AppLabel([string]$p) {
+    if ($st.extraNames -and $st.extraNames.ContainsKey($p)) { return "$($st.extraNames[$p]) ($p)" }
+    $nf = Join-Path $bundle "tiles\$p.txt"
+    if (Test-Path $nf) { return ([IO.File]::ReadAllText($nf) -split "`n")[0].Trim() + " ($p)" }
+    $p
+  }
+  function ResolverApps {
+    $st.extraPkgs = @(); $st.extraNames = @{}
+    if (-not $appsArg) { return }
+    $known = @(); foreach ($v in $APP_MAP.Values) { $known += $v }
+    foreach ($x in ($appsArg -split ',' | Where-Object { $_ })) {
+      if (@('todas', 'todos', 'all') -contains (AppNorm $x)) {
+        $pool = if ($launchable.Count) { $launchable } else { $third }
+        foreach ($c in ($pool | Sort-Object -Unique)) {
+          if ($c -eq $PKG -or $disabled -contains $c) { continue }
+          if (($third -contains $c -or $known -contains $c) -and $st.extraPkgs -notcontains $c) { $st.extraPkgs += $c }
+        }
+        continue
+      }
+      $r = AppResolve $x
+      if ($r.pkg) {
+        if ($st.extraPkgs -notcontains $r.pkg) { $st.extraPkgs += $r.pkg; if ($x -notmatch '\.') { $st.extraNames[$r.pkg] = $x } }
+        if ($r.pkg -ne $x) { LogQ "apps: $x -> $($r.pkg)" }
+      } else { Aviso "App '$x': $($r.why). No va al inicio (no se instala nada)." }
+    }
+    LogQ "apps=$appsArg extra=$($st.extraPkgs -join ' ')"
+  }
 
   function Adb {
     $eap = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
@@ -313,7 +441,7 @@
       $pinHash = ($sha.ComputeHash([Text.Encoding]::ASCII.GetBytes($PIN)) | ForEach-Object { $_.ToString('x2') }) -join ''
     }
     $st.serial = if ($IP -match ':') { $IP } else { "$($IP):5555" }
-    LogQ "ip=$IP theme=$THEME dry=$dry new_dock=$newDock noupdate=$noUpd pin_set=$([bool]$PIN) ps=$($PSVersionTable.PSVersion) os=$([Environment]::OSVersion.VersionString)"
+    LogQ "ip=$IP theme=$THEME city=$city apps=$appsArg dry=$dry new_dock=$newDock noupdate=$noUpd pin_set=$([bool]$PIN) ps=$($PSVersionTable.PSVersion) os=$([Environment]::OSVersion.VersionString)"
 
     # ---------- 1. herramientas ----------
     Paso 1 'Preparando las herramientas (solo la primera vez tarda un poco)'
@@ -363,6 +491,14 @@
     $thCustom = @(Get-ChildItem -Directory -Path (Join-Path $bundle 'themes') | ForEach-Object { $_.Name } | Where-Object { $_ -cmatch $slugRe -and $thBuiltin -notcontains $_ -and (ThPics $_) -gt 0 } | Sort-Object)
     $THEME = ($THEME.ToLower() -replace '\s', '')
     $THEME = (($THEME -split ',') | ForEach-Object { if ($TH_ALIAS.ContainsKey($_)) { $TH_ALIAS[$_] } else { $_ } }) -join ','
+    # Modos del menu Temas: 'aleatorio' (fotos de todos los temas mezcladas) o 'rotar' (un tema completo cada hora)
+    $thMode = ''; $t3 = @()
+    foreach ($t in ($THEME -split ',' | Where-Object { $_ -ne '' })) {
+      if (@('aleatorio', 'aleatoria', 'random', 'mezclar', 'mezcla', 'shuffle') -contains $t) { $thMode = 'aleatorio' }
+      elseif (@('rotar', 'rotartemas', 'rotar-temas', 'rotacion', 'rotate') -contains $t) { $thMode = 'rotar' }
+      else { $t3 += $t }
+    }
+    if ($thMode) { $THEME = if ($t3.Count -eq 0) { 'todos' } else { ($t3 -join ',') + ',' } }
     $sel = @(); $bad = @(); $thList = $false
     if ($THEME -match ',') {
       $thList = $true
@@ -383,7 +519,8 @@
     if ($thList) { $THEME = $sel[0]; $themeGiven = $true }
     elseif (-not $themeGiven) { $THEME = if ($sel -contains 'paisajes') { 'paisajes' } else { $sel[0] } }
     if ($thList) { Bien "Paquete listo ($($sel.Count) temas elegidos: $($sel -join ', '))" } else { Bien "Paquete listo ($($sel.Count) temas)" }
-    LogQ "themes builtin=$($thBuiltin -join ' ') custom=$($thCustom -join ' ') sel=$($sel -join ' ') list=$thList default=$THEME given=$themeGiven"
+    if ($thMode) { $themeGiven = $true }
+    LogQ "themes builtin=$($thBuiltin -join ' ') custom=$($thCustom -join ' ') sel=$($sel -join ' ') list=$thList default=$THEME mode=$thMode given=$themeGiven"
 
     # ---------- 2. conexion ----------
     Paso 2 "Conectando con el TV $IP"
@@ -452,6 +589,14 @@
     $h = @((S cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.HOME) -split "`n")[-1].Trim()
     $st.oldHome = if ($h -match '/') { $h } else { '' }
     $installed = @((S pm list packages) -split "`n" | ForEach-Object { ($_ -replace '^package:', '').Trim() } | Where-Object { $_ })
+    if ($appsArg) {   # apps extra: que hay instalado y que se puede abrir (solo lectura)
+      $disabled = @((S pm list packages -d) -split "`n" | ForEach-Object { ($_ -replace '^package:', '').Trim() } | Where-Object { $_ })
+      $third = @((S pm list packages -3) -split "`n" | ForEach-Object { ($_ -replace '^package:', '').Trim() } | Where-Object { $_ })
+      $qa = (S cmd package query-activities --brief -a android.intent.action.MAIN -c android.intent.category.LEANBACK_LAUNCHER) + "`n" + (S cmd package query-activities --brief -a android.intent.action.MAIN -c android.intent.category.LAUNCHER)
+      $launchable = @($qa -split "`n" | ForEach-Object { if ($_ -match '^\s*([A-Za-z0-9_.]+)/') { $Matches[1] } } | Sort-Object -Unique)
+      LogQ "apps: third=$($third -join ' ') launchable=$($launchable -join ' ')"
+      ResolverApps; $extraPkgs = $st.extraPkgs; $extraNames = $st.extraNames
+    }
     $lukPresent = $installed -contains $PKG; $lukSha = ''; $hasDock = $false; $hasTheme = $false; $tvThemes = @(); $thPrev = @()
     $abis = S getprop ro.product.cpu.abilist; if (-not $abis) { $abis = S getprop ro.product.cpu.abi }
     if ($lukPresent) {
@@ -539,7 +684,22 @@
       if ($installed -contains $p) { Copy-Item $t.FullName, (Join-Path $bundle "tiles\$p.txt") -Destination (Join-Path $st.stage 'tiles'); $ntile++ }
     }
     $wroteDock = $false
-    if ($hasDock -and -not $newDock) { Bien 'El dock ya existia: se deja como esta (para reescribirlo: $NUEVODOCK=1)' }
+    if ($hasDock -and -not $newDock -and $extraPkgs.Count -eq 0) {
+      Bien 'El dock ya existia: se deja como esta (para reescribirlo: $NUEVODOCK=1)'
+      if ($appsArg) { Aviso 'Ninguna de las apps extra se pudo poner en el inicio (ver avisos de arriba)' }
+    }
+    elseif ($hasDock -and -not $newDock) {
+      # $APPS con un dock que ya existe: se deja el dock del TV tal cual y se agregan al final las que falten
+      $prevTxt = ([IO.File]::ReadAllText((Join-Path $bk 'dock-antes.txt')) -replace "`r", '').TrimEnd("`n")
+      $dock = @($prevTxt -split "`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ -and -not $_.StartsWith('#') })
+      $added = @(); $already = @()
+      foreach ($p in $extraPkgs) { if ($dock -contains $p) { $already += (AppLabel $p) } else { $dock += $p; $added += (AppLabel $p); $prevTxt += "`n$p" } }
+      if ($added.Count) {
+        WriteLF (Join-Path $st.stage 'dock.txt') ($prevTxt + "`n"); $wroteDock = $true
+        Bien ("Dock: se deja el que tenia el TV y se agregan al final: " + ($added -join ', '))
+      } else { Bien 'Dock: se deja como esta' }
+      if ($already.Count) { Bien ("Ya estaban en el inicio: " + ($already -join ', ')) }
+    }
     else {
       $dock = @(); $missing = @()
       foreach ($p in $DOCK_APPS) {
@@ -547,11 +707,15 @@
         $name = if (Test-Path $nf) { [IO.File]::ReadAllText($nf).Trim() } else { $p }
         if ($installed -contains $p) { $dock += $p } else { $missing += $name }
       }
+      $added = @()
+      foreach ($p in $extraPkgs) { if ($DOCK_APPS -notcontains $p -and $dock -notcontains $p) { $dock += $p; $added += (AppLabel $p) } }
       WriteLF (Join-Path $st.stage 'dock.txt') ("# Apps del inicio, en orden`n" + (($dock | ForEach-Object { "$_`n" }) -join ''))
       $wroteDock = $true
       Bien "Dock: $($dock.Count) app(s) en el inicio; las demas quedan en 'Otras apps'"
+      if ($added.Count) { Bien ("Apps extra en el inicio: " + ($added -join ', ')) }
       if ($missing.Count) { Aviso ("No estan instaladas (no van al dock): " + ($missing -join ', ')) }
     }
+    if ($wroteDock -and $dock.Count -gt 20) { Aviso "El inicio muestra maximo 20 apps; las que pasen de 20 quedan en 'Otras apps'" }
     $wroteTheme = $false; $curTheme = ''
     if ($hasTheme) { $curTheme = ((S run-as $PKG cat files/theme.txt) -split "`n")[0].Trim() }
     if ($thMig.Count) { Bien ("Tema renombrado en el TV: " + ($thMig -join ', ') + " (se reemplaza la carpeta vieja)") }
@@ -561,6 +725,11 @@
       $nf = Join-Path $bundle "themes\$curNew\name.txt"
       Bien ("Se mantiene el tema que ya tenia el TV, con su nombre nuevo: " + $(if (Test-Path $nf) { ([IO.File]::ReadAllText($nf) -split "`n")[0].Trim() } else { $curNew }))
     }
+    elseif ($thMode) {
+      WriteLF (Join-Path $st.stage 'theme.txt') "@$thMode`n"; $wroteTheme = $true
+      if ($thMode -eq 'aleatorio') { Bien 'Temas: Aleatorio (fotos de todos los temas, mezcladas)' }
+      else { Bien 'Temas: Rotar temas (un tema completo cada hora, en el orden de la lista)' }
+    }
     elseif ($themeGiven -or -not $hasTheme -or $thRm -contains $curTheme) {
       WriteLF (Join-Path $st.stage 'theme.txt') "$THEME`n"; $wroteTheme = $true
       $nf = Join-Path $bundle "themes\$THEME\name.txt"
@@ -568,12 +737,16 @@
     } else { Bien 'Se mantiene el tema que ya tenia el TV' }
     if ($thRmMsg.Count) { Bien ("Se quitan del TV los temas que ya no van: " + ($thRmMsg -join ', ') + " (solo temas puestos por el instalador)") }
     if ($PIN) { WriteLF (Join-Path $st.stage 'pin.txt') "$pinHash`n" }
+    if ($city) {
+      WriteLF (Join-Path $st.stage 'weather.txt') "# Luk Home: ciudad del tiempo (auto = por internet). Puesta por el instalador.`n$city`n"
+      if ($city -eq 'auto') { Bien 'Tiempo: ciudad automatica (por internet)' } else { Bien "Tiempo: ciudad fija '$city' (se cambia en el TV con 'Cambiar ciudad')" }
+    }
     $njpg = @(Get-ChildItem -Recurse -File -Path (Join-Path $st.stage 'themes') | Where-Object { $_.Extension -match '^\.(jpe?g|png|webp)$' }).Count
     $kb = [int]((Get-ChildItem -Recurse -File -Path $st.stage | Measure-Object -Sum Length).Sum / 1024)
     LogQ "stage=$($st.stage) themes=$($sel.Count) jpg=$njpg tiles=$ntile kb=$kb"
     if ($dry) {
       Sim "adb push lukhome\ -> /data/local/tmp/ ($($sel.Count) temas, $njpg fotos, $ntile iconos, $kb KB)"
-      $w = 'themes/, tiles/, rotate.txt'; if ($hasLogo) { $w += ', logo.png' }; if ($wroteDock) { $w += ', dock.txt' }; if ($wroteTheme) { $w += ', theme.txt' }; if ($PIN) { $w += ', pin.txt' }
+      $w = 'themes/, tiles/, rotate.txt'; if ($hasLogo) { $w += ', logo.png' }; if ($wroteDock) { $w += ', dock.txt' }; if ($wroteTheme) { $w += ', theme.txt' }; if ($city) { $w += ', weather.txt' }; if ($PIN) { $w += ', pin.txt' }
       Sim "adb shell sh /data/local/tmp/lukhome/tv-apply.sh  (escribe: $w)"
       if ($wroteDock) { Sim ("dock.txt = " + ($dock -join ' ')) }
       $rmTxt = ''; if ($thRm.Count) { $rmTxt = "   (se borrarian del TV: $($thRm -join ', '))" }
@@ -643,7 +816,7 @@
       if ($vUop -notmatch 'GET_USAGE_STATS: allow') { Falla 'El TV no acepto el acceso de uso para Luk Home.' "Valor leido: $vUop" }
     }
     if ((S pm path $PKG) -notmatch 'package:') { Falla 'Luk Home no aparece instalado.' }
-    $vTheme = ((S run-as $PKG cat files/theme.txt) -split "`n")[0].Trim(); if (-not $vTheme) { $vTheme = $THEME }
+    $vTheme = ((S run-as $PKG cat files/theme.txt) -split "`n")[0].Trim(); if (-not $vTheme -or $vTheme.StartsWith('@')) { $vTheme = $THEME }
     $vJpg = @((S run-as $PKG ls "files/themes/$vTheme") -split "`n" | Where-Object { $_ -match '\.(jpe?g|png|webp)$' }).Count
     if ($vJpg -lt 1) { Falla 'Los temas no quedaron guardados en el TV.' }
     if ($PIN) { if (((S run-as $PKG cat files/pin.txt) -split "`n")[0].Trim() -ne $pinHash) { Falla 'El PIN no quedo guardado bien.' } }
@@ -671,6 +844,7 @@
     Say ''
     Say '  LISTO! Luk Home quedo instalado en el TV.' 'Green'
     Say '  - Boton "Temas" (arriba a la derecha) para cambiar el fondo.'
+    Say '  - Boton del tiempo (arriba a la derecha): temperatura, pronostico y "Cambiar ciudad".'
     Say '  - Ajustes queda protegido con PIN.'
     Say "  - Apps: $($st.updSum)"
     Say '  - Ya puedes cerrar esta ventana.'
@@ -694,4 +868,4 @@
   finally {
     if (-not $st.success) { try { RestoreAcc } catch { } }
   }
-} $IP $PIN $THEME $DRYRUN $NUEVODOCK $LUK_BUNDLE_URL $LUK_ADB $LUK_HOME_DIR $NOUPDATE
+} $IP $PIN $THEME $DRYRUN $NUEVODOCK $LUK_BUNDLE_URL $LUK_ADB $LUK_HOME_DIR $NOUPDATE $CIUDAD $APPS

@@ -1,14 +1,25 @@
 #!/usr/bin/env bash
 # Instalador de Luk Home para clientes (Mac; también funciona en Linux).
 #
-#   curl -fsSL https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.sh | bash -s -- <IP> <PIN> [TEMA]
+#   curl -fsSL https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.sh | bash -s -- <IP> <PIN> [TEMA] [CIUDAD] [APPS]
 #
 #   <IP>    IP del Fire TV / Google TV (Ajustes > Mi Fire TV > Acerca de > Red)
 #   <PIN>   4 números para bloquear Ajustes (o "sinpin" para no poner PIN)
 #   [TEMA]  tema inicial (por defecto: paisajes), "todos", o una LISTA separada por comas
 #           (ej. autos,mar,terror): solo esos temas van al TV y el primero es el inicial.
 #           Nombres viejos que siguen valiendo: halloween-terror / halloween / horror = terror.
+#           "aleatorio" = fotos de todos los temas mezcladas; "rotar" = un tema completo cada hora.
+#           Van en el mismo lugar del TEMA (solos, o al principio de la lista: rotar,mar,autos).
 #           Temas: carpetas de bundle/themes/ (las de order.txt + temas personalizados de clientes).
+#   [CIUDAD] ciudad del botón del tiempo (arriba a la derecha): "Miami", "Madrid, España", "25.76,-80.19"
+#           o "auto" (por internet, según la IP). Sin CIUDAD el TV se queda con la que tenga (al principio: auto).
+#           Para poner ciudad sin elegir tema use TEMA "todos", o la variable: ... | CIUDAD="Miami" bash -s -- <IP> <PIN>
+#           "-" = no cambiar la ciudad (sirve para poner APPS sin tocar el tiempo).
+#   [APPS]  apps del cliente que también van al inicio, después de Stremio / IPTV Smarters / TizenTube, separadas
+#           por comas y sin espacios: netflix,youtube,disney (o el paquete exacto, ej. com.netflix.ninja).
+#           "todas" = todas las apps que ya tiene el cliente. Las que no estén instaladas se saltan con un aviso.
+#           Si el TV ya tenía dock, se deja como está y estas se agregan al final. No instala ni toca las apps.
+#           También: --apps netflix,youtube   o   APPS="netflix,youtube" antes de bash.
 #
 # Opciones (después de la IP y el PIN):
 #   --dry-run        hace todo (descargas, conexión, lecturas, respaldo) pero NO escribe nada en el TV ni pulsa teclas
@@ -36,21 +47,41 @@ main() {
   local TH_RENAMED="halloween-terror:terror" TH_RENAMED_OLD="halloween-terror"
 
   # ---------- argumentos ----------
-  local IP="" PIN="" THEME="" THEME_GIVEN=0 DRY=0 NEW_DOCK=0 NOUPD="${LUK_NOUPDATE:-0}" a
+  local APPS_ENV="${APPS:-}"   # variable APPS= de afuera (antes de que la tape la local)
+  local IP="" PIN="" THEME="" THEME_GIVEN=0 CITY="" CITY_SKIP=0 APPS="" APPS_NEXT=0 NPOS=0 DRY=0 NEW_DOCK=0 NOUPD="${LUK_NOUPDATE:-0}" a
   for a in "$@"; do
+    if [ "$APPS_NEXT" = 1 ]; then APPS="$a"; APPS_NEXT=0; continue; fi
     case "$a" in
       --dry-run|--simular) DRY=1 ;;
       --nuevo-dock) NEW_DOCK=1 ;;
       --sin-actualizar|--no-update) NOUPD=1 ;;
-      -h|--help) sed -n '2,22p' "$0" 2>/dev/null || true; return 0 ;;
+      --apps) APPS_NEXT=1 ;;
+      --apps=*) APPS="${a#--apps=}" ;;
+      -h|--help) sed -n '2,32p' "$0" 2>/dev/null || true; return 0 ;;
+      -|--) NPOS=$((NPOS + 1))
+         case "$NPOS" in 2) PIN="-" ;; 4) CITY_SKIP=1 ;; 3) THEME="todos" ;; esac ;;   # "-" = no cambiar / por defecto
       -*) printf 'Opción desconocida: %s\n' "$a"; return 2 ;;
-      *) if [ -z "$IP" ]; then IP="$a"; elif [ -z "$PIN" ]; then PIN="$a"; elif [ -z "$THEME" ]; then THEME="$a"; THEME_GIVEN=1
-         else printf 'Sobra este dato: %s\n' "$a"; return 2; fi ;;
+      *) NPOS=$((NPOS + 1))
+         case "$NPOS" in
+           1) IP="$a" ;; 2) PIN="$a" ;; 3) THEME="$a"; THEME_GIVEN=1 ;; 4) CITY="$a" ;; 5) APPS="$a" ;;
+           *) printf 'Sobra este dato: %s\n' "$a"; return 2 ;;
+         esac ;;
     esac
   done
   IP="${IP:-${LUK_IP:-}}"; PIN="${PIN:-${LUK_PIN:-}}"
   if [ -z "$THEME" ] && [ -n "${LUK_THEME:-}" ]; then THEME="$LUK_THEME"; THEME_GIVEN=1; fi
   case "$NOUPD" in 1|si|sí|yes|true) NOUPD=1 ;; *) NOUPD=0 ;; esac
+  # Ciudad del tiempo (files/weather.txt): 4º dato, o CIUDAD= / LUK_CIUDAD=. Una línea, máx. 80 caracteres.
+  [ -n "$CITY" ] || [ "$CITY_SKIP" = 1 ] || CITY="${CIUDAD:-${LUK_CIUDAD:-}}"
+  CITY=$(printf '%s' "$CITY" | tr -d '\r\n\t' | sed -E 's/^[[:space:]]+|[[:space:]]+$//g' | cut -c1-80)
+  case "$(printf '%s' "$CITY" | tr 'A-Z' 'a-z')" in auto|automatica|automática|ip|internet) CITY=auto ;; esac
+  # "-" / "igual" / "nada" = no cambiar la ciudad (sirve para poner APPS sin tocar el tiempo)
+  case "$(printf '%s' "$CITY" | tr 'A-Z' 'a-z')" in -|_|igual|nada|ninguna|sin|sinciudad|no) CITY="" ;; esac
+  # Apps extra para el inicio (5º dato, --apps, o APPS= / LUK_APPS=): nombres separados por comas, sin espacios
+  [ -n "$APPS" ] || APPS="${LUK_APPS:-${APPS_ENV:-}}"
+  APPS=$(printf '%s' "$APPS" | tr -d '\r\n\t ' | tr ';' ',' | sed 's/^,*//; s/,*$//')
+  case "$(printf '%s' "$APPS" | tr 'A-Z' 'a-z')" in -|no|ninguna|nada) APPS="" ;; esac
+  local EXTRA_PKGS="" EXTRA_NAMES="" DISABLED="" LAUNCHABLE="" THIRD="" KNOWN_PKGS="" RES_PKG="" RES_WHY="" APP_KNOWN=""
 
   # ---------- salida ----------
   local B="" G="" Y="" R="" C="" N=""
@@ -107,6 +138,126 @@ main() {
   sha() { if command -v shasum >/dev/null 2>&1; then shasum -a 256 "$1" | awk '{print $1}'; else sha256sum "$1" | awk '{print $1}'; fi; }
   unz() { if command -v unzip >/dev/null 2>&1; then unzip -qo "$1" -d "$2"; else python3 -m zipfile -e "$1" "$2"; fi; }
   dl() { curl -fL --retry 3 --connect-timeout 20 -sS -o "$2" "$1" >>"$LOG" 2>&1; }
+
+  # ---------- apps extra en el inicio (APPS) ----------
+  # Solo cambia la lista del dock de Luk Home (files/dock.txt). Nunca instala, desinstala, actualiza ni borra
+  # datos de ninguna app. Nombres comunes -> paquetes (Fire TV y Google TV usan a veces paquetes distintos;
+  # se usa el primero que esté instalado). Un nombre con punto se toma como paquete exacto.
+  app_cands() {
+    case "$1" in
+      netflix) echo com.netflix.ninja com.netflix.mediaclient ;;
+      youtube|yt) echo com.amazon.firetv.youtube com.google.android.youtube.tv com.google.android.youtube.tvunplugged.youtube com.google.android.youtube ;;
+      youtubetv|yttv) echo com.amazon.firetv.youtube.tv com.google.android.youtube.tvunplugged ;;
+      youtubekids|ytkids) echo com.amazon.firetv.youtube.kids com.google.android.youtube.tvkids com.google.android.apps.youtube.kids ;;
+      youtubemusic|ytmusic) echo com.google.android.youtube.tvmusic com.google.android.apps.youtube.music ;;
+      smarttube) echo org.smarttube.stable org.smarttube.beta com.teamsmart.videomanager.tv com.liskovsoft.smarttubetv.beta com.liskovsoft.smarttubetv ;;
+      prime|primevideo|amazonprime|amazonvideo|amazonprimevideo) echo com.amazon.avod com.amazon.amazonvideo.livingroom com.amazon.firebat com.amazon.avod.thirdpartyclient ;;
+      disney|disneyplus) echo com.disney.disneyplus ;;
+      hulu) echo com.hulu.livingroomplus com.hulu.plus ;;
+      max|hbomax|hbo) echo com.wbd.stream com.hbo.hbonow com.hbo.max ;;
+      paramount|paramountplus) echo com.cbs.ott com.cbs.app ;;
+      peacock) echo com.peacock.peacockfiretv com.peacocktv.peacockandroid ;;
+      appletv) echo com.apple.atve.amazon.appletv com.apple.atve.androidtv.appletv com.apple.atve.sony.appletv ;;
+      spotify) echo com.spotify.tv.android com.spotify.music ;;
+      pluto|plutotv) echo tv.pluto.android ;;
+      tubi|tubitv) echo com.tubitv com.tubitv.ott ;;
+      plex) echo com.plexapp.android ;;
+      kodi) echo org.xbmc.kodi ;;
+      vlc) echo org.videolan.vlc ;;
+      espn) echo com.espn.gtv com.espn.score_center ;;
+      fubo|fubotv) echo com.fubo.firetv.screen com.fubotv.android com.fubo.android ;;
+      sling|slingtv) echo com.sling ;;
+      downloader) echo com.esaba.downloader ;;
+      stremio) echo com.stremio.one ;;
+      smarters|iptvsmarters) echo com.nst.iptvsmarterstvbox ;;
+      tizentube) echo io.gh.reisxd.tizentube.cobalt ;;
+      tivimate) echo ar.tvplayer.tv ;;
+      xciptv) echo com.nathnetwork.xciptv ;;
+      nuvio) echo com.nuvio.tv ;;
+      crunchyroll) echo com.crunchyroll.crunchyroid ;;
+      dazn) echo com.dazn ;;
+      twitch) echo tv.twitch.android.viewer tv.twitch.android.app ;;
+      vix) echo com.univision.prendetv ;;
+      mxplayer|mx) echo com.mxtech.videoplayer.ad com.mxtech.videoplayer.pro com.mxtech.videoplayer.television ;;
+      perfectplayer) echo com.niklabs.pp ;;
+      ottnavigator) echo studio.scillarium.ottnavigator ;;
+      silk) echo com.amazon.cloud9 ;;
+      starz) echo com.bydeluxe.d3.android.program.starz ;;
+      philo) echo com.philo.philo.google com.philo.philo ;;
+      directv|directvstream) echo com.att.tv com.directv.dtvlatam ;;
+      telemundo) echo com.telemundo.android.telemundoapp com.nbcuni.telemundo.noticiastelemundo ;;
+    esac
+  }
+  APP_KNOWN="netflix youtube youtubetv youtubekids youtubemusic smarttube prime disney hulu max paramount peacock appletv spotify pluto tubi plex kodi vlc espn fubo sling downloader stremio smarters tizentube tivimate xciptv nuvio crunchyroll dazn twitch vix mxplayer perfectplayer ottnavigator silk starz philo directv telemundo"
+  app_norm() { printf '%s' "$1" | tr 'A-Z' 'a-z' | sed 's/[+ _-]//g; s/ó/o/g; s/é/e/g; s/í/i/g; s/á/a/g; s/ú/u/g'; }
+  # 0 si el paquete se puede abrir desde un launcher (sin datos del TV = se asume que sí)
+  app_launch() { [ -z "$LAUNCHABLE" ] || inlist "$1" "$LAUNCHABLE"; }
+  # $1 = nombre -> RES_PKG (vacío si no) y RES_WHY (motivo)
+  app_resolve() {
+    local n c hit="" inst="" dis="" m="" nm=0 m3="" n3=0 q
+    RES_PKG="" RES_WHY=""
+    case "$1" in
+      *.*) if inlist "$1" "$DISABLED"; then RES_WHY="está desactivada en el TV"
+           elif inlist "$1" "$INSTALLED"; then
+             if app_launch "$1"; then RES_PKG=$1; else RES_WHY="está instalada pero no se abre desde el inicio"; fi
+           else RES_WHY="no está instalada"; fi; return 0 ;;
+    esac
+    n=$(app_norm "$1")
+    for c in $(app_cands "$n"); do
+      inlist "$c" "$INSTALLED" || continue
+      if inlist "$c" "$DISABLED"; then dis=$c; continue; fi
+      inst=$c; app_launch "$c" && { hit=$c; break; }
+    done
+    if [ -n "$hit" ]; then RES_PKG=$hit; return 0; fi
+    if [ -n "$inst" ]; then RES_WHY="está instalada ($inst) pero no se abre desde el inicio"; return 0; fi
+    if [ -n "$dis" ]; then RES_WHY="está desactivada en el TV ($dis); no se activa"; return 0; fi
+    # Búsqueda aproximada por nombre de paquete (ej. "cinema" -> com.algo.cinemahd)
+    if [ "${#n}" -ge 3 ]; then
+      for c in ${LAUNCHABLE:-$INSTALLED}; do
+        [ "$c" = "$PKG" ] && continue
+        q=$(printf '%s' "$c" | tr 'A-Z' 'a-z' | tr -d '._')
+        case "$q" in *"$n"*) m="$m $c"; nm=$((nm + 1)); inlist "$c" "$THIRD" && { m3="$m3 $c"; n3=$((n3 + 1)); } ;; esac
+      done
+      if [ "$nm" = 1 ]; then RES_PKG=${m# }; return 0; fi
+      if [ "$n3" = 1 ]; then RES_PKG=${m3# }; return 0; fi
+      if [ "$nm" -gt 1 ]; then RES_WHY="hay varias que se parecen:$(printf '%s' "$m" | sed 's/ /, /g; s/^,//'). Escribe el nombre del paquete exacto"; return 0; fi
+    fi
+    RES_WHY="no está instalada"
+    return 0
+  }
+  # nombre para mostrar: el que escribió el usuario, si no el de la tile, si no el paquete
+  app_label() {
+    local kv; for kv in $EXTRA_NAMES; do [ "${kv%%=*}" = "$1" ] && { printf '%s (%s)' "${kv#*=}" "$1"; return 0; }; done
+    if [ -f "$BUNDLE/tiles/$1.txt" ]; then printf '%s (%s)' "$(head -1 "$BUNDLE/tiles/$1.txt")" "$1"; else printf '%s' "$1"; fi
+  }
+  # APPS -> EXTRA_PKGS (en orden, sin repetir) + avisos
+  resolver_apps() {
+    local x k all="" c
+    EXTRA_PKGS="" EXTRA_NAMES=""
+    [ -n "$APPS" ] || return 0
+    for x in $(printf '%s' "$APPS" | tr ',;' '  '); do
+      case "$(app_norm "$x")" in
+        todas|todos|all)
+          for c in ${LAUNCHABLE:-$THIRD}; do
+            [ "$c" = "$PKG" ] && continue
+            inlist "$c" "$DISABLED" && continue
+            if inlist "$c" "$THIRD" || inlist "$c" "$KNOWN_PKGS"; then all="$all $c"; fi
+          done
+          for c in $(printf '%s\n' $all | sort -u); do inlist "$c" "$EXTRA_PKGS" || EXTRA_PKGS="$EXTRA_PKGS $c"; done ;;
+        *)
+          app_resolve "$x"
+          if [ -n "$RES_PKG" ]; then
+            inlist "$RES_PKG" "$EXTRA_PKGS" || { EXTRA_PKGS="$EXTRA_PKGS $RES_PKG"
+              case "$x" in *.*) ;; *) EXTRA_NAMES="$EXTRA_NAMES $RES_PKG=$x" ;; esac; }
+            [ "$RES_PKG" = "$x" ] || logq "apps: $x -> $RES_PKG"
+          else
+            aviso "App \"$x\": $RES_WHY. No va al inicio (no se instala nada)."
+          fi ;;
+      esac
+    done
+    EXTRA_PKGS=${EXTRA_PKGS# }
+    logq "apps=$APPS extra=$EXTRA_PKGS"
+  }
 
   # ---------- actualizar apps del cliente (paso 8) ----------
   # Solo Stremio, IPTV Smarters y TizenTube, solo si ya están instaladas, solo a una versión oficial MÁS NUEVA
@@ -304,7 +455,7 @@ PLEOF
     PIN_HASH=$(printf '%s' "$PIN" | { if command -v shasum >/dev/null 2>&1; then shasum -a 256; else sha256sum; fi; } | awk '{print $1}')
   fi
   case "$IP" in *:*) SERIAL="$IP" ;; *) SERIAL="$IP:5555" ;; esac
-  logq "ip=$IP theme=$THEME dry=$DRY new_dock=$NEW_DOCK noupdate=$NOUPD pin_set=$([ -n "$PIN" ] && echo yes || echo no) os=$(uname -a)"
+  logq "ip=$IP theme=$THEME city=${CITY:-(sin cambio)} apps=${APPS:-(ninguna)} dry=$DRY new_dock=$NEW_DOCK noupdate=$NOUPD pin_set=$([ -n "$PIN" ] && echo yes || echo no) os=$(uname -a)"
 
   # ---------- 1. herramientas ----------
   paso 1 "Preparando las herramientas (solo la primera vez tarda un poco)"
@@ -353,6 +504,20 @@ PLEOF
     okslug "$t" && ! inlist "$t" "$TH_BUILTIN" && [ "$(thpics "$t")" -gt 0 ] && TH_CUSTOM="$TH_CUSTOM $t"
   done
   THEME=$(printf '%s' "$THEME" | tr 'A-Z' 'a-z' | tr -d ' \r')
+  # Modos del menú Temas: "aleatorio" (fotos de todos los temas mezcladas) o "rotar" (un tema completo cada hora).
+  # Van en la lista de temas (mejor al principio): aleatorio  |  rotar,mar,autos,espacio
+  local TH_MODE="" t3=""
+  for t in $(printf '%s' "$THEME" | tr ',' ' '); do
+    case "$t" in
+      aleatorio|aleatoria|random|mezclar|mezcla|shuffle) TH_MODE=aleatorio ;;
+      rotar|rotartemas|rotar-temas|rotacion|rotate) TH_MODE=rotar ;;
+      *) t3="$t3,$t" ;;
+    esac
+  done
+  if [ -n "$TH_MODE" ]; then
+    t3="${t3#,}"
+    if [ -z "$t3" ]; then THEME=todos; else case "$t3" in *,*) THEME="$t3" ;; *) THEME="$t3," ;; esac; fi
+  fi
   # Nombres viejos de temas (alias): las líneas de antes siguen funcionando.
   case "$THEME" in
     *,*) local t2=""; for t in $(printf '%s' "$THEME" | tr ',' ' '); do t2="$t2,$(th_alias "$t")"; done
@@ -378,10 +543,11 @@ PLEOF
   TH_SEL="${TH_SEL# }"
   if [ "$TH_LIST" = 1 ]; then THEME="${TH_SEL%% *}"; THEME_GIVEN=1
   elif [ -z "$THEME" ] || [ "$THEME" = todos ]; then THEME=paisajes; inlist paisajes "$TH_SEL" || THEME="${TH_SEL%% *}"; fi
+  [ -n "$TH_MODE" ] && THEME_GIVEN=1
   local nsel; nsel=$(printf '%s\n' $TH_SEL | grep -c .)
   if [ "$TH_LIST" = 1 ]; then bien "Paquete listo ($nsel temas elegidos: $(printf '%s' "$TH_SEL" | sed 's/ /, /g'))"
   else bien "Paquete listo ($nsel temas)"; fi
-  logq "themes builtin=$TH_BUILTIN custom=$TH_CUSTOM sel=$TH_SEL list=$TH_LIST default=$THEME given=$THEME_GIVEN"
+  logq "themes builtin=$TH_BUILTIN custom=$TH_CUSTOM sel=$TH_SEL list=$TH_LIST default=$THEME mode=${TH_MODE:-no} given=$THEME_GIVEN"
 
   # ---------- 2. conexión ----------
   paso 2 "Conectando con el TV $IP"
@@ -463,6 +629,17 @@ PLEOF
   OLD_HOME=$(S cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.HOME | tail -1)
   case "$OLD_HOME" in */*) ;; *) OLD_HOME="" ;; esac
   local INSTALLED; INSTALLED=" $(S pm list packages | sed 's/^package://' | tr '\n' ' ') "
+  if [ -n "$APPS" ]; then   # apps extra para el inicio: qué hay instalado y qué se puede abrir (solo lectura)
+    DISABLED=" $(S pm list packages -d | sed 's/^package://' | tr '\n' ' ') "
+    THIRD=" $(S pm list packages -3 | sed 's/^package://' | tr '\n' ' ') "
+    LAUNCHABLE=$( { S cmd package query-activities --brief -a android.intent.action.MAIN -c android.intent.category.LEANBACK_LAUNCHER
+                    S cmd package query-activities --brief -a android.intent.action.MAIN -c android.intent.category.LAUNCHER; } \
+                  | sed -n 's#^[[:space:]]*\([A-Za-z0-9_.]*\)/.*#\1#p' | sort -u | tr '\n' ' ')
+    [ -n "$LAUNCHABLE" ] && LAUNCHABLE=" $LAUNCHABLE "
+    local kn; for kn in $APP_KNOWN; do KNOWN_PKGS="$KNOWN_PKGS $(app_cands "$kn")"; done; KNOWN_PKGS="$KNOWN_PKGS "
+    logq "apps: third=$THIRD launchable=${LAUNCHABLE:-(no se pudo leer)}"
+    resolver_apps
+  fi
   local LUK_PRESENT=0 LUK_SHA="" HAS_DOCK=0 HAS_THEME=0 TV_THEMES="" TH_PREV=""
   local ABIS; ABIS=$(S getprop ro.product.cpu.abilist); [ -n "$ABIS" ] || ABIS=$(S getprop ro.product.cpu.abi)
   if inlist "$PKG" "$INSTALLED"; then
@@ -567,26 +744,57 @@ EOS
     p=$(basename "$p" .png)
     if inlist "$p" "$INSTALLED"; then cp "$BUNDLE/tiles/$p.png" "$BUNDLE/tiles/$p.txt" "$STAGE/tiles/"; ntile=$((ntile + 1)); fi
   done
-  if [ "$HAS_DOCK" = 1 ] && [ "$NEW_DOCK" = 0 ]; then
+  local DOCK_MODE=""
+  if [ "$HAS_DOCK" = 1 ] && [ "$NEW_DOCK" = 0 ] && [ -z "$EXTRA_PKGS" ]; then
     bien "El dock ya existía: se deja como está (para reescribirlo: --nuevo-dock)"
+    [ -n "$APPS" ] && aviso "Ninguna de las apps extra se pudo poner en el inicio (ver avisos de arriba)"
+  elif [ "$HAS_DOCK" = 1 ] && [ "$NEW_DOCK" = 0 ]; then
+    # APPS con un dock que ya existe: se deja el dock del TV tal cual y se agregan al final las que falten
+    awk '{print}' "$BK/dock-antes.txt" > "$STAGE/dock.txt"
+    local have added="" already=""
+    have=" $(grep -v '^#' "$STAGE/dock.txt" | tr -d ' \r' | tr '\n' ' ') "
+    for p in $EXTRA_PKGS; do
+      name=$(app_label "$p")
+      if inlist "$p" "$have"; then already="$already, $name"; else echo "$p" >> "$STAGE/dock.txt"; have="$have$p "; added="$added, $name"; ndock=$((ndock + 1)); fi
+    done
+    if [ -n "$added" ]; then DOCK_MODE=extra; bien "Dock: se deja el que tenía el TV y se agregan al final:${added#,}"
+    else rm -f "$STAGE/dock.txt"; bien "Dock: se deja como está"; fi
+    [ -n "$already" ] && bien "Ya estaban en el inicio:${already#,}"
   else
     printf '# Apps del inicio, en orden\n' > "$STAGE/dock.txt"
     for p in $DOCK_APPS; do
       name=$(cat "$BUNDLE/tiles/$p.txt" 2>/dev/null || echo "$p")
       if inlist "$p" "$INSTALLED"; then echo "$p" >> "$STAGE/dock.txt"; ndock=$((ndock + 1)); else missing="$missing, $name"; fi
     done
+    local added=""
+    for p in $EXTRA_PKGS; do
+      inlist "$p" "$DOCK_APPS" && continue
+      echo "$p" >> "$STAGE/dock.txt"; ndock=$((ndock + 1)); added="$added, $(app_label "$p")"
+    done
     bien "Dock: $ndock app(s) en el inicio; las demás quedan en \"Otras apps\""
+    [ -n "$added" ] && bien "Apps extra en el inicio:${added#,}"
     [ -n "$missing" ] && aviso "No están instaladas (no van al dock):${missing#,}"
+  fi
+  if [ -f "$STAGE/dock.txt" ] && [ "$(grep -v '^#' "$STAGE/dock.txt" | grep -c .)" -gt 20 ]; then
+    aviso "El inicio muestra máximo 20 apps; las que pasen de 20 quedan en \"Otras apps\""
   fi
   local CUR_THEME=""; [ "$HAS_THEME" = 1 ] && CUR_THEME=$(S run-as "$PKG" cat files/theme.txt | head -1 | tr -d '\r')
   local CUR_NEW=""; for pr in $TH_RENAMED; do [ "$CUR_THEME" = "${pr%%:*}" ] && CUR_NEW="${pr#*:}"; done
   [ -n "$TH_MIG" ] && bien "Tema renombrado en el TV:$(printf '%s' "$TH_MIG" | sed 's/ /, /g; s/^,//') (se reemplaza la carpeta vieja)"
   if [ "$THEME_GIVEN" = 0 ] && [ "$HAS_THEME" = 1 ] && [ -n "$CUR_NEW" ] && inlist "$CUR_NEW" "$TH_SEL"; then
     printf '%s\n' "$CUR_NEW" > "$STAGE/theme.txt"; bien "Se mantiene el tema que ya tenía el TV, con su nombre nuevo: $(head -1 "$BUNDLE/themes/$CUR_NEW/name.txt" 2>/dev/null || echo "$CUR_NEW")"
+  elif [ -n "$TH_MODE" ]; then
+    printf '@%s\n' "$TH_MODE" > "$STAGE/theme.txt"
+    if [ "$TH_MODE" = aleatorio ]; then bien "Temas: Aleatorio (fotos de todos los temas, mezcladas)"
+    else bien "Temas: Rotar temas (un tema completo cada hora, en el orden de la lista)"; fi
   elif [ "$THEME_GIVEN" = 1 ] || [ "$HAS_THEME" = 0 ] || inlist "$CUR_THEME" "$TH_RM"; then printf '%s\n' "$THEME" > "$STAGE/theme.txt"; bien "Tema inicial: $(head -1 "$BUNDLE/themes/$THEME/name.txt" 2>/dev/null || echo "$THEME")"
   else bien "Se mantiene el tema que ya tenía el TV"; fi
   [ -n "$TH_RM_MSG" ] && bien "Se quitan del TV los temas que ya no van: $(printf '%s' "${TH_RM_MSG# }" | sed 's/ /, /g') (solo temas puestos por el instalador)"
   [ -n "$PIN" ] && printf '%s\n' "$PIN_HASH" > "$STAGE/pin.txt"
+  if [ -n "$CITY" ]; then   # ciudad del botón del tiempo; Luk Home la busca en Open-Meteo al recargar
+    printf '# Luk Home: ciudad del tiempo (auto = por internet). Puesta por el instalador.\n%s\n' "$CITY" > "$STAGE/weather.txt"
+    if [ "$CITY" = auto ]; then bien "Tiempo: ciudad automática (por internet)"; else bien "Tiempo: ciudad fija \"$CITY\" (se cambia en el TV con \"Cambiar ciudad\")"; fi
+  fi
   local nth njpg kb
   nth=$(grep -c . "$STAGE/themes/order.txt"); njpg=$(find "$STAGE/themes" -type f \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' -o -iname '*.webp' \) | wc -l | tr -d ' ')
   kb=$(du -sk "$STAGE" | cut -f1)
@@ -594,7 +802,7 @@ EOS
   if [ "$DRY" = 1 ]; then
     bash -n "$STAGE/tv-apply.sh" 2>>"$LOG" || falla "tv-apply.sh tiene un error de sintaxis."
     sim "adb push lukhome/ → /data/local/tmp/ ($nth temas, $njpg fotos, $ntile íconos, $kb KB)"
-    sim "adb shell sh /data/local/tmp/lukhome/tv-apply.sh  (escribe: themes/, tiles/, rotate.txt$( [ -f "$STAGE/logo.png" ] && echo ', logo.png')$( [ -f "$STAGE/dock.txt" ] && echo ', dock.txt')$( [ -f "$STAGE/theme.txt" ] && echo ', theme.txt')$( [ -n "$PIN" ] && echo ', pin.txt'))"
+    sim "adb shell sh /data/local/tmp/lukhome/tv-apply.sh  (escribe: themes/, tiles/, rotate.txt$( [ -f "$STAGE/logo.png" ] && echo ', logo.png')$( [ -f "$STAGE/dock.txt" ] && echo ', dock.txt')$( [ -f "$STAGE/theme.txt" ] && echo ', theme.txt')$( [ -f "$STAGE/weather.txt" ] && echo ', weather.txt')$( [ -n "$PIN" ] && echo ', pin.txt'))"
     [ -f "$STAGE/dock.txt" ] && sim "dock.txt = $(grep -v '^#' "$STAGE/dock.txt" | tr '\n' ' ')"
     sim "temas = $(printf '%s' "$TH_SEL" | sed 's/ /, /g')$( [ -n "$TH_RM" ] && printf '   (se borrarían del TV: %s)' "$(printf '%s' "${TH_RM# }" | sed 's/ /, /g')")"
   else
@@ -663,7 +871,8 @@ EOS
     case "$v_uop" in *"GET_USAGE_STATS: allow"*) ;; *) falla "El TV no aceptó el acceso de uso para Luk Home." "Valor leído: $v_uop" ;; esac
   fi
   S pm path "$PKG" | grep -q package: || falla "Luk Home no aparece instalado."
-  v_theme=$(S run-as "$PKG" cat files/theme.txt | head -1)
+  v_theme=$(S run-as "$PKG" cat files/theme.txt | head -1 | tr -d '\r')
+  case "$v_theme" in @*) v_theme="" ;; esac   # modo Aleatorio / Rotar: se comprueba el primer tema
   v_jpg=$(S run-as "$PKG" ls "files/themes/${v_theme:-$THEME}" | grep -ciE '\.(jpe?g|png|webp)$')
   [ "${v_jpg:-0}" -ge 1 ] || falla "Los temas no quedaron guardados en el TV."
   if [ -n "$PIN" ]; then
@@ -696,6 +905,7 @@ EOS
   say ""
   say "${G}${B}  ¡LISTO! Luk Home quedó instalado en el TV.${N}"
   say "  • Botón \"Temas\" (arriba a la derecha) para cambiar el fondo."
+  say "  • Botón del tiempo (arriba a la derecha): temperatura, pronóstico y \"Cambiar ciudad\"."
   say "  • Ajustes queda protegido con PIN."
   say "  • Apps: $UPD_SUM"
   say "  • Ya puedes cerrar esta ventana."
