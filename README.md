@@ -7,7 +7,7 @@ Lo único que toca de las apps del cliente: si **Stremio, IPTV Smarters o TizenT
 
 ## Copiar y pegar: línea con todos los temas
 
-La línea tiene 6 partes separadas por **espacios**: IP, PIN, TEMAS, CIUDAD, APPS y BOTONES.
+La línea tiene 7 partes separadas por **espacios**: IP, PIN, TEMAS, CIUDAD, APPS, BOTONES y ESTILO.
 
 - **IP**: cambia `192.168.0.x` por la IP del TV (también puede empezar con `10.0.0.`).
 - **PIN**: cambia `1234` por el PIN del cliente.
@@ -15,15 +15,16 @@ La línea tiene 6 partes separadas por **espacios**: IP, PIN, TEMAS, CIUDAD, APP
 - **CIUDAD** (para el tiempo): `auto` = el TV la detecta solo. O pon la ciudad, por ejemplo `Miami`. Si tiene dos palabras, va entre comillas: `"Fort Lauderdale"`.
 - **APPS** extra en el inicio, junto a Stremio, IPTV Smarters y TizenTube: cambia `netflix,youtube,disney` por las apps del cliente, o pon `todas`. Si no quieres apps extra, borra esa última parte (en Windows borra `$APPS='...';`).
 - **BOTONES**: `--bloquear-botones` deja sin efecto los botones de apps del control (Netflix, Prime, etc.) para que no abran la tienda a descargar apps. En Fire TV solo se frenan los de apps que no están instaladas. Si no lo quieres, borra esa parte (en Windows borra `$BOTONES='bloquear';`).
+- **ESTILO** de las tarjetas del inicio: `--estilo=oscuro` = tarjetas oscuras con el logo blanco que se pone verde al pasar por encima (el normal). Cambia `oscuro` por `colores` para tarjetas de colores (con rayas, brillo y el logo en una bolita). En Windows es `$ESTILO='oscuro';` o `$ESTILO='colores';`. Si borras esa parte, el TV se queda con el estilo que ya tenga (un TV nuevo empieza en oscuro). El cliente también lo puede cambiar después con el control: botón de **Temas** (la paleta, arriba) > **Estilo** > **Oscuro** o **Colores**.
 
 **Mac** (app Terminal):
 ```bash
-curl -fsSL https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.sh | bash -s -- 192.168.0.x 1234 real-madrid,navidad,terror,american-sports,autos,animales,mar,barcos,espacio,paisajes auto netflix,youtube,disney --bloquear-botones
+curl -fsSL https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.sh | bash -s -- 192.168.0.x 1234 real-madrid,navidad,terror,american-sports,autos,animales,mar,barcos,espacio,paisajes auto netflix,youtube,disney --bloquear-botones --estilo=oscuro
 ```
 
 **Windows** (PowerShell normal, sin administrador; es una sola línea):
 ```powershell
-$IP='192.168.0.x'; $PIN='1234'; $THEME='real-madrid,navidad,terror,american-sports,autos,animales,mar,barcos,espacio,paisajes'; $CIUDAD='auto'; $APPS='netflix,youtube,disney'; $BOTONES='bloquear'; [Net.ServicePointManager]::SecurityProtocol='Tls12'; irm https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.ps1 | iex
+$IP='192.168.0.x'; $PIN='1234'; $THEME='real-madrid,navidad,terror,american-sports,autos,animales,mar,barcos,espacio,paisajes'; $CIUDAD='auto'; $APPS='netflix,youtube,disney'; $BOTONES='bloquear'; $ESTILO='oscuro'; [Net.ServicePointManager]::SecurityProtocol='Tls12'; irm https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.ps1 | iex
 ```
 
 | Nombre en la línea | Botón Temas | Tipo |
@@ -46,16 +47,16 @@ Si el TV ya tenía la carpeta vieja `halloween-terror`, al repetir el instalador
 
 1. El archivo **[CLIENTE.md](CLIENTE.md)** (o su texto), con los 4 pasos que verá.
 2. **La línea de su sistema**, ya con **su IP y su PIN** puestos (cambia `192.168.1.50` y `1234`). Trae todos los temas, la ciudad y las apps extra
-   (lee arriba qué es cada parte; solo se instalan los temas que dejes en la línea).
+   (lee arriba qué es cada parte; solo se instalan los temas que dejes en la línea; `--estilo=oscuro` o `--estilo=colores` elige las tarjetas).
 
 **Mac** (app Terminal):
 ```bash
-curl -fsSL https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.sh | bash -s -- 192.168.1.50 1234 real-madrid,navidad,terror,american-sports,autos,animales,mar,barcos,espacio,paisajes auto netflix,youtube,disney --bloquear-botones
+curl -fsSL https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.sh | bash -s -- 192.168.1.50 1234 real-madrid,navidad,terror,american-sports,autos,animales,mar,barcos,espacio,paisajes auto netflix,youtube,disney --bloquear-botones --estilo=oscuro
 ```
 
 **Windows** (PowerShell normal, sin administrador; es una sola línea):
 ```powershell
-$IP='192.168.1.50'; $PIN='1234'; $THEME='real-madrid,navidad,terror,american-sports,autos,animales,mar,barcos,espacio,paisajes'; $CIUDAD='auto'; $APPS='netflix,youtube,disney'; $BOTONES='bloquear'; [Net.ServicePointManager]::SecurityProtocol='Tls12'; irm https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.ps1 | iex
+$IP='192.168.1.50'; $PIN='1234'; $THEME='real-madrid,navidad,terror,american-sports,autos,animales,mar,barcos,espacio,paisajes'; $CIUDAD='auto'; $APPS='netflix,youtube,disney'; $BOTONES='bloquear'; $ESTILO='oscuro'; [Net.ServicePointManager]::SecurityProtocol='Tls12'; irm https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.ps1 | iex
 ```
 
 - **IP**: la del TV del cliente (ver abajo).
@@ -104,6 +105,17 @@ Extras opcionales:
 | Ciudad del tiempo (ver abajo) | 4.º valor después del tema, o `CIUDAD="Miami"` antes de `bash` | `$CIUDAD='Miami';` |
 | Apps extra en el inicio (ver abajo) | 5.º valor, o `--apps netflix,youtube`, o `APPS=netflix,youtube` antes de `bash` | `$APPS='netflix,youtube';` |
 | Botones de apps del control sin efecto (ver abajo) | `--bloquear-botones` (volver: `--desbloquear-botones`) | `$BOTONES='bloquear';` (volver: `$BOTONES='normal';`) |
+| Estilo de las tarjetas del inicio (ver abajo) | `--estilo=oscuro` o `--estilo=colores` (o `ESTILO=colores` antes de `bash`) | `$ESTILO='oscuro';` o `$ESTILO='colores';` |
+
+### Estilo de las tarjetas del inicio (Oscuro o Colores)
+
+- **Oscuro** (el normal): tarjetas grafito con el logo oficial en blanco; la que tiene el foco se pone con el logo verde y un borde verde que "respira".
+- **Colores**: tarjetas de colores (13 colores, con rayas suaves y brillo) y el logo de la app en una bolita redonda.
+
+Se elige con `--estilo=oscuro` / `--estilo=colores` (Windows `$ESTILO='oscuro';` / `$ESTILO='colores';`). Sin la opción
+no se cambia el TV (uno nuevo empieza en **Oscuro**). En el TV, sin PIN: subir con el control hasta el botón de **Temas**
+(la paleta), OK, bajar hasta **Estilo** y elegir **Oscuro** o **Colores** con OK; cambia al momento y se queda guardado
+aunque se apague el TV. Se guarda en `files/dock-style.txt` (`oscuro` / `colores`).
 
 ### Botones de apps del control (opcional)
 
@@ -146,21 +158,21 @@ Nombres separados por comas, **sin espacios**. Si una app no está en el TV, se 
 
 En Mac es el **5.º valor**: IP, PIN, TEMA, CIUDAD, APPS. Si no quieres cambiar el tema pon todos; para la ciudad pon auto
 (automática) o - (no tocar la ciudad). Al final va `--bloquear-botones` (en Windows `$BOTONES='bloquear';`), que deja sin
-efecto los botones de apps del control; bórralo si no lo quieres.
+efecto los botones de apps del control; bórralo si no lo quieres. Después `--estilo=oscuro` (o `colores`; Windows `$ESTILO='oscuro';`).
 
 Mac (app Terminal), línea lista para copiar:
 
-curl -fsSL https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.sh | bash -s -- 10.0.0.250 1234 real-madrid auto netflix,youtube,disney --bloquear-botones
+curl -fsSL https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.sh | bash -s -- 10.0.0.250 1234 real-madrid auto netflix,youtube,disney --bloquear-botones --estilo=oscuro
 
 Windows (PowerShell), línea lista para copiar:
 
-$IP='10.0.0.250'; $PIN='1234'; $THEME='real-madrid'; $CIUDAD='auto'; $APPS='netflix,youtube,disney'; $BOTONES='bloquear'; [Net.ServicePointManager]::SecurityProtocol='Tls12'; irm https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.ps1 | iex
+$IP='10.0.0.250'; $PIN='1234'; $THEME='real-madrid'; $CIUDAD='auto'; $APPS='netflix,youtube,disney'; $BOTONES='bloquear'; $ESTILO='oscuro'; [Net.ServicePointManager]::SecurityProtocol='Tls12'; irm https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.ps1 | iex
 
 Con todos los temas y apps extra (Mac y Windows):
 
-curl -fsSL https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.sh | bash -s -- 192.168.0.x 1234 real-madrid,navidad,terror,american-sports,autos,animales,mar,barcos,espacio,paisajes - netflix,youtube,disney --bloquear-botones
+curl -fsSL https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.sh | bash -s -- 192.168.0.x 1234 real-madrid,navidad,terror,american-sports,autos,animales,mar,barcos,espacio,paisajes - netflix,youtube,disney --bloquear-botones --estilo=oscuro
 
-$IP='192.168.0.x'; $PIN='1234'; $THEME='real-madrid,navidad,terror,american-sports,autos,animales,mar,barcos,espacio,paisajes'; $APPS='netflix,youtube,disney'; $BOTONES='bloquear'; [Net.ServicePointManager]::SecurityProtocol='Tls12'; irm https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.ps1 | iex
+$IP='192.168.0.x'; $PIN='1234'; $THEME='real-madrid,navidad,terror,american-sports,autos,animales,mar,barcos,espacio,paisajes'; $APPS='netflix,youtube,disney'; $BOTONES='bloquear'; $ESTILO='oscuro'; [Net.ServicePointManager]::SecurityProtocol='Tls12'; irm https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.ps1 | iex
 
 Nombres que entiende (sirven en Fire TV y en Google TV / onn; mayúsculas, espacios, guiones y "+" dan igual):
 
@@ -317,6 +329,11 @@ Los tres APK son compilaciones *debug* firmadas con la misma llave (necesario pa
 
 ## Cambios
 
+- **2026-11-02d:** **Opción de estilo: Oscuro o Colores.** En el botón de Temas hay una sección nueva **Estilo** con
+  **Oscuro** (las tarjetas grafito con logo blanco y foco verde de 2026-11-02c) y **Colores** (las tarjetas de colores de
+  2026-11-01h: rayas, brillo y el logo en una bolita). Cambia al momento, sin PIN, y se guarda (`files/dock-style.txt`).
+  Nuevo `--estilo=oscuro|colores` (Windows `$ESTILO='oscuro'|'colores'`); sin la opción el TV se queda como esté (nuevo = Oscuro).
+  APK nuevos (misma firma; se conservan datos, tema, PIN y dock).
 - **2026-11-02c:** **Esquinas de las tarjetas arregladas.** Detrás de cada tarjeta del inicio se veía un "pico"
   cuadrado en las esquinas (sobre todo arriba), porque el relleno de la tarjeta no se recortaba a la forma redondeada;
   solo el borde fino era redondo. Ahora todo (relleno, degradados, brillo, borde y foco verde) usa la misma esquina

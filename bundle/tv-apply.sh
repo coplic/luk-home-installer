@@ -6,6 +6,7 @@
 # Theme folders listed in themes/remove.txt (old installer themes not in the client's list, and old names of
 # renamed themes, e.g. halloween-terror -> terror since 2026-11-01c) are deleted.
 # block-app-buttons.txt ("on"/"off", 2026-11-02): remote app-shortcut buttons blocked or normal.
+# dock-style.txt ("oscuro"/"colores", 2026-11-02d): dock card style; absent = oscuro.
 # Prints "LUK_APPLY_OK" on success, "LUK_APPLY_FAIL <what>" on failure, and always deletes the staging folder.
 P=com.ivantrj.glasslauncher
 D=${LUK_STAGE:-/data/local/tmp/lukhome}
@@ -64,7 +65,7 @@ if [ -f "$D/weather.txt" ]; then
   done > "$D/weather.keep" 2>/dev/null
   [ -s "$D/weather.keep" ] && cat "$D/weather.keep" >> "$D/weather.txt"
 fi
-for x in rotate.txt dock.txt theme.txt logo.png weather.txt block-app-buttons.txt; do
+for x in rotate.txt dock.txt theme.txt logo.png weather.txt block-app-buttons.txt dock-style.txt; do
   if [ -f "$D/$x" ]; then put "$D/$x" "$x"; echo "WROTE $x"; fi
 done
 if [ -f "$D/pin.txt" ]; then
