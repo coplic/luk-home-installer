@@ -25,6 +25,10 @@
 #   --dry-run        hace todo (descargas, conexión, lecturas, respaldo) pero NO escribe nada en el TV ni pulsa teclas
 #   --nuevo-dock     reescribe el dock (Stremio, IPTV Smarters, TizenTube) aunque Luk Home ya tenga uno
 #   --sin-actualizar no revisa si hay versión nueva de Stremio / IPTV Smarters / TizenTube (también LUK_NOUPDATE=1)
+#   --bloquear-botones    los botones de apps del control (Netflix, Prime, YouTube...) no hacen nada (LUK_BOTONES=bloquear)
+#                         Google TV / onn: el botón no hace nada. Fire TV: si la app no está instalada, la página
+#                         de la tienda que abre se cierra sola; las apps instaladas (ej. Prime Video) sí se abren.
+#   --desbloquear-botones vuelve a dejar los botones como vienen (LUK_BOTONES=normal). Sin estas opciones no se cambia.
 #
 # Solo modo "launcher": no borra ni desinstala ninguna app del cliente. Lo único que toca de sus apps es
 # actualizar (adb install -r, conserva datos y sesiones) Stremio / IPTV Smarters / TizenTube si ya están
@@ -48,12 +52,14 @@ main() {
 
   # ---------- argumentos ----------
   local APPS_ENV="${APPS:-}"   # variable APPS= de afuera (antes de que la tape la local)
-  local IP="" PIN="" THEME="" THEME_GIVEN=0 CITY="" CITY_SKIP=0 APPS="" APPS_NEXT=0 NPOS=0 DRY=0 NEW_DOCK=0 NOUPD="${LUK_NOUPDATE:-0}" a
+  local IP="" PIN="" THEME="" THEME_GIVEN=0 CITY="" CITY_SKIP=0 APPS="" APPS_NEXT=0 NPOS=0 DRY=0 NEW_DOCK=0 NOUPD="${LUK_NOUPDATE:-0}" BTN="${LUK_BOTONES:-}" a
   for a in "$@"; do
     if [ "$APPS_NEXT" = 1 ]; then APPS="$a"; APPS_NEXT=0; continue; fi
     case "$a" in
       --dry-run|--simular) DRY=1 ;;
       --nuevo-dock) NEW_DOCK=1 ;;
+      --bloquear-botones) BTN=bloquear ;;
+      --desbloquear-botones|--botones-normales) BTN=normal ;;
       --sin-actualizar|--no-update) NOUPD=1 ;;
       --apps) APPS_NEXT=1 ;;
       --apps=*) APPS="${a#--apps=}" ;;
@@ -71,6 +77,7 @@ main() {
   IP="${IP:-${LUK_IP:-}}"; PIN="${PIN:-${LUK_PIN:-}}"
   if [ -z "$THEME" ] && [ -n "${LUK_THEME:-}" ]; then THEME="$LUK_THEME"; THEME_GIVEN=1; fi
   case "$NOUPD" in 1|si|sí|yes|true) NOUPD=1 ;; *) NOUPD=0 ;; esac
+  case "$(printf '%s' "$BTN" | tr 'A-Z' 'a-z')" in bloquear|on|si|sí|1|yes|true) BTN=on ;; normal|desbloquear|off|no|0|false) BTN=off ;; *) BTN="" ;; esac
   # Ciudad del tiempo (files/weather.txt): 4º dato, o CIUDAD= / LUK_CIUDAD=. Una línea, máx. 80 caracteres.
   [ -n "$CITY" ] || [ "$CITY_SKIP" = 1 ] || CITY="${CIUDAD:-${LUK_CIUDAD:-}}"
   CITY=$(printf '%s' "$CITY" | tr -d '\r\n\t' | sed -E 's/^[[:space:]]+|[[:space:]]+$//g' | cut -c1-80)
@@ -455,7 +462,7 @@ PLEOF
     PIN_HASH=$(printf '%s' "$PIN" | { if command -v shasum >/dev/null 2>&1; then shasum -a 256; else sha256sum; fi; } | awk '{print $1}')
   fi
   case "$IP" in *:*) SERIAL="$IP" ;; *) SERIAL="$IP:5555" ;; esac
-  logq "ip=$IP theme=$THEME city=${CITY:-(sin cambio)} apps=${APPS:-(ninguna)} dry=$DRY new_dock=$NEW_DOCK noupdate=$NOUPD pin_set=$([ -n "$PIN" ] && echo yes || echo no) os=$(uname -a)"
+  logq "ip=$IP theme=$THEME city=${CITY:-(sin cambio)} apps=${APPS:-(ninguna)} dry=$DRY new_dock=$NEW_DOCK noupdate=$NOUPD buttons=${BTN:-(sin cambio)} pin_set=$([ -n "$PIN" ] && echo yes || echo no) os=$(uname -a)"
 
   # ---------- 1. herramientas ----------
   paso 1 "Preparando las herramientas (solo la primera vez tarda un poco)"
@@ -791,6 +798,8 @@ EOS
   else bien "Se mantiene el tema que ya tenía el TV"; fi
   [ -n "$TH_RM_MSG" ] && bien "Se quitan del TV los temas que ya no van: $(printf '%s' "${TH_RM_MSG# }" | sed 's/ /, /g') (solo temas puestos por el instalador)"
   [ -n "$PIN" ] && printf '%s\n' "$PIN_HASH" > "$STAGE/pin.txt"
+  if [ "$BTN" = on ]; then printf 'on\n' > "$STAGE/block-app-buttons.txt"; bien "Botones de apps del control: bloqueados (para volver: --desbloquear-botones)"
+  elif [ "$BTN" = off ]; then printf 'off\n' > "$STAGE/block-app-buttons.txt"; bien "Botones de apps del control: normales"; fi
   if [ -n "$CITY" ]; then   # ciudad del botón del tiempo; Luk Home la busca en Open-Meteo al recargar
     printf '# Luk Home: ciudad del tiempo (auto = por internet). Puesta por el instalador.\n%s\n' "$CITY" > "$STAGE/weather.txt"
     if [ "$CITY" = auto ]; then bien "Tiempo: ciudad automática (por internet)"; else bien "Tiempo: ciudad fija \"$CITY\" (se cambia en el TV con \"Cambiar ciudad\")"; fi
@@ -802,7 +811,7 @@ EOS
   if [ "$DRY" = 1 ]; then
     bash -n "$STAGE/tv-apply.sh" 2>>"$LOG" || falla "tv-apply.sh tiene un error de sintaxis."
     sim "adb push lukhome/ → /data/local/tmp/ ($nth temas, $njpg fotos, $ntile íconos, $kb KB)"
-    sim "adb shell sh /data/local/tmp/lukhome/tv-apply.sh  (escribe: themes/, tiles/, rotate.txt$( [ -f "$STAGE/logo.png" ] && echo ', logo.png')$( [ -f "$STAGE/dock.txt" ] && echo ', dock.txt')$( [ -f "$STAGE/theme.txt" ] && echo ', theme.txt')$( [ -f "$STAGE/weather.txt" ] && echo ', weather.txt')$( [ -n "$PIN" ] && echo ', pin.txt'))"
+    sim "adb shell sh /data/local/tmp/lukhome/tv-apply.sh  (escribe: themes/, tiles/, rotate.txt$( [ -f "$STAGE/logo.png" ] && echo ', logo.png')$( [ -f "$STAGE/dock.txt" ] && echo ', dock.txt')$( [ -f "$STAGE/theme.txt" ] && echo ', theme.txt')$( [ -f "$STAGE/weather.txt" ] && echo ', weather.txt')$( [ -n "$PIN" ] && echo ', pin.txt')$( [ -f "$STAGE/block-app-buttons.txt" ] && echo ', block-app-buttons.txt'))"
     [ -f "$STAGE/dock.txt" ] && sim "dock.txt = $(grep -v '^#' "$STAGE/dock.txt" | tr '\n' ' ')"
     sim "temas = $(printf '%s' "$TH_SEL" | sed 's/ /, /g')$( [ -n "$TH_RM" ] && printf '   (se borrarían del TV: %s)' "$(printf '%s' "${TH_RM# }" | sed 's/ /, /g')")"
   else

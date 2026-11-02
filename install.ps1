@@ -7,6 +7,8 @@
 #   $THEME='aleatorio' o 'rotar' (o al principio de la lista: 'rotar,mar,autos'): modos del menu Temas.
 #                aleatorio = fotos de todos los temas mezcladas; rotar = un tema completo cada hora
 #   Nombres viejos que siguen valiendo: halloween-terror / halloween / horror = terror.
+#   $BOTONES='bloquear'  los botones de apps del control (Netflix, Prime, YouTube...) no hacen nada
+#                (Fire TV: solo los de apps no instaladas, que abren la tienda); $BOTONES='normal' los deja como vienen.
 #   $NOUPDATE=1  no revisar si hay version nueva de Stremio / IPTV Smarters / TizenTube
 #   $CIUDAD='Miami'  ciudad del boton del tiempo (arriba a la derecha): 'Madrid, Espana', '25.76,-80.19' o 'auto'
 #                (por internet, segun la IP). Sin $CIUDAD el TV se queda con la que tenga (al principio: auto).
@@ -21,7 +23,7 @@
 # (Este archivo es solo ASCII a proposito: asi se lee igual en cualquier consola de Windows.)
 
 & {
-  param($IP, $PIN, $THEME, $DRYRUN, $NUEVODOCK, $BURL, $ADBOVR, $HOMEDIR, $NOUPDATE, $CIUDAD, $APPS)
+  param($IP, $PIN, $THEME, $DRYRUN, $NUEVODOCK, $BURL, $ADBOVR, $HOMEDIR, $NOUPDATE, $CIUDAD, $APPS, $BOTONES)
 
   $ErrorActionPreference = 'Stop'
   $ProgressPreference = 'SilentlyContinue'
@@ -46,6 +48,10 @@
   $dry = [bool]$DRYRUN -and "$DRYRUN" -ne '0'
   $newDock = [bool]$NUEVODOCK -and "$NUEVODOCK" -ne '0'
   $noUpd = [bool]$NOUPDATE -and "$NOUPDATE" -ne '0'
+  $btn = ''
+  $b0 = "$BOTONES".Trim().ToLower()
+  if (@('bloquear', 'on', 'si', '1', 'yes', 'true') -contains $b0) { $btn = 'on' }
+  elseif (@('normal', 'desbloquear', 'off', 'no', '0', 'false') -contains $b0) { $btn = 'off' }
   # Ciudad del tiempo (files/weather.txt): una linea, max. 80 caracteres; auto/automatica/ip = por internet
   $city = ("$CIUDAD" -replace "[`r`n`t]", ' ').Trim()
   if ($city.Length -gt 80) { $city = $city.Substring(0, 80).Trim() }
@@ -441,7 +447,7 @@
       $pinHash = ($sha.ComputeHash([Text.Encoding]::ASCII.GetBytes($PIN)) | ForEach-Object { $_.ToString('x2') }) -join ''
     }
     $st.serial = if ($IP -match ':') { $IP } else { "$($IP):5555" }
-    LogQ "ip=$IP theme=$THEME city=$city apps=$appsArg dry=$dry new_dock=$newDock noupdate=$noUpd pin_set=$([bool]$PIN) ps=$($PSVersionTable.PSVersion) os=$([Environment]::OSVersion.VersionString)"
+    LogQ "ip=$IP theme=$THEME city=$city apps=$appsArg dry=$dry new_dock=$newDock noupdate=$noUpd buttons=$btn pin_set=$([bool]$PIN) ps=$($PSVersionTable.PSVersion) os=$([Environment]::OSVersion.VersionString)"
 
     # ---------- 1. herramientas ----------
     Paso 1 'Preparando las herramientas (solo la primera vez tarda un poco)'
@@ -737,6 +743,8 @@
     } else { Bien 'Se mantiene el tema que ya tenia el TV' }
     if ($thRmMsg.Count) { Bien ("Se quitan del TV los temas que ya no van: " + ($thRmMsg -join ', ') + " (solo temas puestos por el instalador)") }
     if ($PIN) { WriteLF (Join-Path $st.stage 'pin.txt') "$pinHash`n" }
+    if ($btn -eq 'on') { WriteLF (Join-Path $st.stage 'block-app-buttons.txt') "on`n"; Bien 'Botones de apps del control: bloqueados (para volver: $BOTONES=''normal'')' }
+    elseif ($btn -eq 'off') { WriteLF (Join-Path $st.stage 'block-app-buttons.txt') "off`n"; Bien 'Botones de apps del control: normales' }
     if ($city) {
       WriteLF (Join-Path $st.stage 'weather.txt') "# Luk Home: ciudad del tiempo (auto = por internet). Puesta por el instalador.`n$city`n"
       if ($city -eq 'auto') { Bien 'Tiempo: ciudad automatica (por internet)' } else { Bien "Tiempo: ciudad fija '$city' (se cambia en el TV con 'Cambiar ciudad')" }
@@ -746,7 +754,7 @@
     LogQ "stage=$($st.stage) themes=$($sel.Count) jpg=$njpg tiles=$ntile kb=$kb"
     if ($dry) {
       Sim "adb push lukhome\ -> /data/local/tmp/ ($($sel.Count) temas, $njpg fotos, $ntile iconos, $kb KB)"
-      $w = 'themes/, tiles/, rotate.txt'; if ($hasLogo) { $w += ', logo.png' }; if ($wroteDock) { $w += ', dock.txt' }; if ($wroteTheme) { $w += ', theme.txt' }; if ($city) { $w += ', weather.txt' }; if ($PIN) { $w += ', pin.txt' }
+      $w = 'themes/, tiles/, rotate.txt'; if ($hasLogo) { $w += ', logo.png' }; if ($wroteDock) { $w += ', dock.txt' }; if ($wroteTheme) { $w += ', theme.txt' }; if ($city) { $w += ', weather.txt' }; if ($PIN) { $w += ', pin.txt' }; if ($btn) { $w += ', block-app-buttons.txt' }
       Sim "adb shell sh /data/local/tmp/lukhome/tv-apply.sh  (escribe: $w)"
       if ($wroteDock) { Sim ("dock.txt = " + ($dock -join ' ')) }
       $rmTxt = ''; if ($thRm.Count) { $rmTxt = "   (se borrarian del TV: $($thRm -join ', '))" }
@@ -868,4 +876,4 @@
   finally {
     if (-not $st.success) { try { RestoreAcc } catch { } }
   }
-} $IP $PIN $THEME $DRYRUN $NUEVODOCK $LUK_BUNDLE_URL $LUK_ADB $LUK_HOME_DIR $NOUPDATE $CIUDAD $APPS
+} $IP $PIN $THEME $DRYRUN $NUEVODOCK $LUK_BUNDLE_URL $LUK_ADB $LUK_HOME_DIR $NOUPDATE $CIUDAD $APPS $BOTONES

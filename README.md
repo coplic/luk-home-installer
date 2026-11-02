@@ -102,6 +102,21 @@ Extras opcionales:
 | No revisar actualizaciones de Stremio / IPTV Smarters / TizenTube | `--sin-actualizar` (o `LUK_NOUPDATE=1`) | `$NOUPDATE=1;` |
 | Ciudad del tiempo (ver abajo) | 4.º valor después del tema, o `CIUDAD="Miami"` antes de `bash` | `$CIUDAD='Miami';` |
 | Apps extra en el inicio (ver abajo) | 5.º valor, o `--apps netflix,youtube`, o `APPS=netflix,youtube` antes de `bash` | `$APPS='netflix,youtube';` |
+| Botones de apps del control sin efecto (ver abajo) | `--bloquear-botones` (volver: `--desbloquear-botones`) | `$BOTONES='bloquear';` (volver: `$BOTONES='normal';`) |
+
+### Botones de apps del control (opcional)
+
+Los controles traen botones de marca (Netflix, Prime Video, YouTube, Disney+, Hulu…) que abren esa app o, si no está
+instalada, su página en la tienda. Con `--bloquear-botones` (Windows `$BOTONES='bloquear';`) Luk Home los deja sin efecto:
+
+- **Google TV / onn:** el botón no hace nada (Luk Home se come la tecla antes de que el sistema la use).
+- **Fire TV:** Amazon procesa esos botones antes que Luk Home, así que no se pueden cortar del todo: si la app **no está
+  instalada**, la página de la tienda que se abre se cierra sola en menos de un segundo y se vuelve a lo que estaba en
+  pantalla. Si la app **sí está instalada** (p. ej. Prime Video, Disney+), se abre normal.
+
+Sin la opción no se cambia nada. Se guarda en `files/block-app-buttons.txt` (`on` / `off`). Deshacer en un TV:
+`--desbloquear-botones` o `adb shell run-as com.ivantrj.glasslauncher rm files/block-app-buttons.txt`.
+Cada tecla rara que llega se anota en el log: `adb logcat -s LukKeys` (sirve para identificar un botón nuevo).
 
 ### Tiempo en vivo (botón del clima)
 
@@ -300,6 +315,18 @@ Los tres APK son compilaciones *debug* firmadas con la misma llave (necesario pa
 
 ## Cambios
 
+- **2026-11-02a:** **Dock nuevo "cálido" (diseño calido-b, tamaño B).** Todas las apps del inicio son ahora tarjetas
+  iguales de vidrio ahumado grafito cálido (196×122 px a 1080p, separación ~22 px): degradado más claro arriba y más
+  oscuro abajo, brillo suave arriba, sombra suave debajo y un borde fino luminoso más claro arriba. Se quitaron la
+  paleta de colores, las franjas, la burbuja y los colores por app; también los tiles personalizados se muestran como
+  tarjeta. En cada tarjeta va el logo oficial en blanco (~45 % de la altura; incluidos en el APK para Stremio, Nuvio,
+  TizenTube, IPTV Smarters, Prime Video, HBO Max, Kodi, SmartTube, Surfshark, Netflix, YouTube, Disney+, Hulu,
+  Paramount+, Spotify, Plex, Pluto TV, Crunchyroll, Tubi, Twitch, Apple TV y YouTube Music; las demás apps usan la
+  silueta blanca de su ícono) y el nombre en letra blanca pequeña debajo. La barra del dock tiene un tinte cálido con
+  borde fino claro. **Foco:** borde verde luminoso con resplandor y la tarjeta crece a 1.08×; el resplandor aparece en
+  ~0.3 s, "respira" suave cada ~2 s y se apaga al salir; el resaltado de vidrio conserva su movimiento con resorte.
+  **Nuevo `--bloquear-botones` / `$BOTONES='bloquear'`** (ver "Botones de apps del control"). APK nuevos (misma firma;
+  se actualizan con `adb install -r`, conservan tema, PIN, dock y ajustes).
 - **2026-11-01h:** **Cada tile de un color distinto.** Las apps del dock sin tile propio ya no toman el color de su
   ícono tal cual (Prime Video, Kodi y Surfshark salían del mismo azul/turquesa): ahora salen de una paleta de
   degradados (naranja, amarillo, lima, verde, turquesa, celeste, azul, índigo, morado, magenta, rosa, rojo y plateado).
