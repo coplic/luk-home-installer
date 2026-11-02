@@ -19,17 +19,18 @@ La línea tiene 7 partes separadas por **espacios**: IP, PIN, TEMAS, CIUDAD, APP
 
 **Mac** (app Terminal):
 ```bash
-curl -fsSL https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.sh | bash -s -- 192.168.0.x 1234 real-madrid,navidad,terror,american-sports,autos,animales,mar,barcos,espacio,paisajes auto netflix,youtube,disney --bloquear-botones --estilo=oscuro
+curl -fsSL https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.sh | bash -s -- 192.168.0.x 1234 real-madrid,real-madrid-2,navidad,terror,american-sports,autos,animales,mar,barcos,espacio,paisajes auto netflix,youtube,disney --bloquear-botones --estilo=oscuro
 ```
 
 **Windows** (PowerShell normal, sin administrador; es una sola línea):
 ```powershell
-$IP='192.168.0.x'; $PIN='1234'; $THEME='real-madrid,navidad,terror,american-sports,autos,animales,mar,barcos,espacio,paisajes'; $CIUDAD='auto'; $APPS='netflix,youtube,disney'; $BOTONES='bloquear'; $ESTILO='oscuro'; [Net.ServicePointManager]::SecurityProtocol='Tls12'; irm https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.ps1 | iex
+$IP='192.168.0.x'; $PIN='1234'; $THEME='real-madrid,real-madrid-2,navidad,terror,american-sports,autos,animales,mar,barcos,espacio,paisajes'; $CIUDAD='auto'; $APPS='netflix,youtube,disney'; $BOTONES='bloquear'; $ESTILO='oscuro'; [Net.ServicePointManager]::SecurityProtocol='Tls12'; irm https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.ps1 | iex
 ```
 
 | Nombre en la línea | Botón Temas | Tipo |
 |---|---|---|
 | `real-madrid` | Real Madrid | personalizado (solo si está en la línea) |
+| `real-madrid-2` | Real Madrid 2 | personalizado (solo si está en la línea) |
 | `navidad` | Navidad | personalizado (solo si está en la línea) |
 | `terror` | Terror | incluido |
 | `american-sports` | Deportes americanos | incluido |
@@ -51,18 +52,18 @@ Si el TV ya tenía la carpeta vieja `halloween-terror`, al repetir el instalador
 
 **Mac** (app Terminal):
 ```bash
-curl -fsSL https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.sh | bash -s -- 192.168.1.50 1234 real-madrid,navidad,terror,american-sports,autos,animales,mar,barcos,espacio,paisajes auto netflix,youtube,disney --bloquear-botones --estilo=oscuro
+curl -fsSL https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.sh | bash -s -- 192.168.1.50 1234 real-madrid,real-madrid-2,navidad,terror,american-sports,autos,animales,mar,barcos,espacio,paisajes auto netflix,youtube,disney --bloquear-botones --estilo=oscuro
 ```
 
 **Windows** (PowerShell normal, sin administrador; es una sola línea):
 ```powershell
-$IP='192.168.1.50'; $PIN='1234'; $THEME='real-madrid,navidad,terror,american-sports,autos,animales,mar,barcos,espacio,paisajes'; $CIUDAD='auto'; $APPS='netflix,youtube,disney'; $BOTONES='bloquear'; $ESTILO='oscuro'; [Net.ServicePointManager]::SecurityProtocol='Tls12'; irm https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.ps1 | iex
+$IP='192.168.1.50'; $PIN='1234'; $THEME='real-madrid,real-madrid-2,navidad,terror,american-sports,autos,animales,mar,barcos,espacio,paisajes'; $CIUDAD='auto'; $APPS='netflix,youtube,disney'; $BOTONES='bloquear'; $ESTILO='oscuro'; [Net.ServicePointManager]::SecurityProtocol='Tls12'; irm https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.ps1 | iex
 ```
 
 - **IP**: la del TV del cliente (ver abajo).
 - **PIN**: 4 números, protege Ajustes de Luk Home. En Windows **siempre entre comillas** (`'0123'`) para no perder ceros. Para no poner PIN: `sinpin`.
 - **Tema** (opcional): `paisajes`, `mar`, `espacio`, `autos`, `animales`, `barcos`, `american-sports`, `terror` (antes `halloween-terror`, que sigue valiendo),
-  o un tema personalizado (ver abajo; ya vienen `real-madrid` y `navidad`). En Mac va como 3.er valor; en Windows `$THEME='mar';` (o quítalo, y van todos los incluidos).
+  o un tema personalizado (ver abajo; ya vienen `real-madrid`, `real-madrid-2` y `navidad`). En Mac va como 3.er valor; en Windows `$THEME='mar';` (o quítalo, y van todos los incluidos).
   - **Un solo nombre** (`mar`): van al TV **todos** los temas y `mar` queda como tema inicial.
   - **Una lista con comas, sin espacios** (`autos,mar,espacio`): van al TV **solo esos**; el **primero** es el inicial.
     `todos` dentro de la lista agrega todos los incluidos (p. ej. `terror,todos`).
@@ -90,6 +91,7 @@ Temas personalizados que ya vienen en el paquete (fuera de `order.txt`, solo par
 | Nombre en la línea | Botón Temas | Contenido |
 |---|---|---|
 | `real-madrid` | Real Madrid | estadio de noche, afición con bufandas blancas, copa, balón blanco y oro, "HALA MADRID", Cibeles y Gran Vía de noche |
+| `real-madrid-2` | Real Madrid 2 | las mismas 8 fotos del club que `real-madrid` (escudo, estadio, jugadores, "¡HALA MADRID!") y 2 fotos nuevas de otro amigo: con su niño en hombros en el Bernabéu, y levantando la Champions |
 | `navidad` | Navidad | chimenea, árbol decorado, pueblo nevado, trineo de Santa, adornos, regalos, cabaña nevada |
 
 Ejemplos: Mac `… 1234 real-madrid` (Real Madrid inicial + todos los incluidos), `… 1234 real-madrid,navidad` (solo esos dos);
@@ -170,9 +172,9 @@ $IP='10.0.0.250'; $PIN='1234'; $THEME='real-madrid'; $CIUDAD='auto'; $APPS='netf
 
 Con todos los temas y apps extra (Mac y Windows):
 
-curl -fsSL https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.sh | bash -s -- 192.168.0.x 1234 real-madrid,navidad,terror,american-sports,autos,animales,mar,barcos,espacio,paisajes - netflix,youtube,disney --bloquear-botones --estilo=oscuro
+curl -fsSL https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.sh | bash -s -- 192.168.0.x 1234 real-madrid,real-madrid-2,navidad,terror,american-sports,autos,animales,mar,barcos,espacio,paisajes - netflix,youtube,disney --bloquear-botones --estilo=oscuro
 
-$IP='192.168.0.x'; $PIN='1234'; $THEME='real-madrid,navidad,terror,american-sports,autos,animales,mar,barcos,espacio,paisajes'; $APPS='netflix,youtube,disney'; $BOTONES='bloquear'; $ESTILO='oscuro'; [Net.ServicePointManager]::SecurityProtocol='Tls12'; irm https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.ps1 | iex
+$IP='192.168.0.x'; $PIN='1234'; $THEME='real-madrid,real-madrid-2,navidad,terror,american-sports,autos,animales,mar,barcos,espacio,paisajes'; $APPS='netflix,youtube,disney'; $BOTONES='bloquear'; $ESTILO='oscuro'; [Net.ServicePointManager]::SecurityProtocol='Tls12'; irm https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.ps1 | iex
 
 Nombres que entiende (sirven en Fire TV y en Google TV / onn; mayúsculas, espacios, guiones y "+" dan igual):
 
@@ -329,6 +331,12 @@ Los tres APK son compilaciones *debug* firmadas con la misma llave (necesario pa
 
 ## Cambios
 
+- **2026-11-02e:** Tema personalizado nuevo **`real-madrid-2`** (botón Temas: "Real Madrid 2"), 10 fondos 1920×1080:
+  las 8 fotos del club de `real-madrid` sin cambios y 2 fotos nuevas de otro amigo (`01-amigo2-bernabeu-familia.jpg`,
+  con su niño en hombros en el Bernabéu, y `02-amigo2-champions.jpg`, levantando la Champions). `real-madrid` no cambia.
+  No está en `order.txt`: solo llega a los TV cuya línea lo nombra. Las líneas para copiar lo traen después de `real-madrid`
+  (bórralo si no es para ese cliente). Los APK y los scripts no cambian.
+
 - **2026-11-02d:** **Opción de estilo: Oscuro o Colores.** En el botón de Temas hay una sección nueva **Estilo** con
   **Oscuro** (las tarjetas grafito con logo blanco y foco verde de 2026-11-02c) y **Colores** (las tarjetas de colores de
   2026-11-01h: rayas, brillo y el logo en una bolita). Cambia al momento, sin PIN, y se guarda (`files/dock-style.txt`).
@@ -404,7 +412,7 @@ Los tres APK son compilaciones *debug* firmadas con la misma llave (necesario pa
   `halloween-terror`, `halloween` y `horror` siguen valiendo como nombres viejos y dan `terror`. Al repetir el instalador en
   un TV que tenía la carpeta `halloween-terror`, se reemplaza por `terror` (no quedan las dos), el tema elegido en el TV pasa
   a `terror` si era ese, y el registro `.instalador.txt` queda con el nombre nuevo. Las líneas para copiar (arriba y en el
-  paso 1) traen ahora **todos los temas** (`real-madrid,navidad,terror,…`) para borrar los que no se quieran. Los APK no cambian.
+  paso 1) traen ahora **todos los temas** (`real-madrid,real-madrid-2,navidad,terror,…`) para borrar los que no se quieran. Los APK no cambian.
 - **2026-11-01b:** Dos temas personalizados nuevos (10 fondos cada uno, 1920×1080): `real-madrid` (Real Madrid) y
   `navidad` (Navidad). No están en `order.txt`: solo llegan a los TV cuya línea los nombra. **Botones solo íconos:** los
   tres botones de arriba a la derecha (Temas, red y Ajustes) ahora son círculos con solo el ícono, sin palabras, con un
