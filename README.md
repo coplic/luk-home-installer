@@ -317,6 +317,11 @@ Los tres APK son compilaciones *debug* firmadas con la misma llave (necesario pa
 
 ## Cambios
 
+- **2026-11-02c:** **Esquinas de las tarjetas arregladas.** Detrás de cada tarjeta del inicio se veía un "pico"
+  cuadrado en las esquinas (sobre todo arriba), porque el relleno de la tarjeta no se recortaba a la forma redondeada;
+  solo el borde fino era redondo. Ahora todo (relleno, degradados, brillo, borde y foco verde) usa la misma esquina
+  redondeada y no se ve nada cuadrado. Nada más cambia. APK nuevos (misma firma; se actualizan con `adb install -r`,
+  conservan tema, PIN, dock y ajustes).
 - **2026-11-02b:** **Foco verde también en el logo.** Al seleccionar una app del inicio, además del borde verde
   luminoso, el **logo de la app se pinta del mismo verde** (los logos oficiales blancos y la silueta blanca de las demás
   apps). Aparece suave en ~0.3 s junto con el borde y vuelve a blanco al salir. Nada más cambia. APK nuevos (misma
