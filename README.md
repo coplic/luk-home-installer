@@ -145,21 +145,22 @@ apps por esto). Van **después** de Stremio, IPTV Smarters y TizenTube, en el or
 Nombres separados por comas, **sin espacios**. Si una app no está en el TV, se salta y avisa (no se detiene).
 
 En Mac es el **5.º valor**: IP, PIN, TEMA, CIUDAD, APPS. Si no quieres cambiar el tema pon todos; para la ciudad pon auto
-(automática) o - (no tocar la ciudad).
+(automática) o - (no tocar la ciudad). Al final va `--bloquear-botones` (en Windows `$BOTONES='bloquear';`), que deja sin
+efecto los botones de apps del control; bórralo si no lo quieres.
 
 Mac (app Terminal), línea lista para copiar:
 
-curl -fsSL https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.sh | bash -s -- 10.0.0.250 1234 real-madrid auto netflix,youtube,disney
+curl -fsSL https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.sh | bash -s -- 10.0.0.250 1234 real-madrid auto netflix,youtube,disney --bloquear-botones
 
 Windows (PowerShell), línea lista para copiar:
 
-$IP='10.0.0.250'; $PIN='1234'; $THEME='real-madrid'; $CIUDAD='auto'; $APPS='netflix,youtube,disney'; [Net.ServicePointManager]::SecurityProtocol='Tls12'; irm https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.ps1 | iex
+$IP='10.0.0.250'; $PIN='1234'; $THEME='real-madrid'; $CIUDAD='auto'; $APPS='netflix,youtube,disney'; $BOTONES='bloquear'; [Net.ServicePointManager]::SecurityProtocol='Tls12'; irm https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.ps1 | iex
 
 Con todos los temas y apps extra (Mac y Windows):
 
-curl -fsSL https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.sh | bash -s -- 192.168.0.x 1234 real-madrid,navidad,terror,american-sports,autos,animales,mar,barcos,espacio,paisajes - netflix,youtube,disney
+curl -fsSL https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.sh | bash -s -- 192.168.0.x 1234 real-madrid,navidad,terror,american-sports,autos,animales,mar,barcos,espacio,paisajes - netflix,youtube,disney --bloquear-botones
 
-$IP='192.168.0.x'; $PIN='1234'; $THEME='real-madrid,navidad,terror,american-sports,autos,animales,mar,barcos,espacio,paisajes'; $APPS='netflix,youtube,disney'; [Net.ServicePointManager]::SecurityProtocol='Tls12'; irm https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.ps1 | iex
+$IP='192.168.0.x'; $PIN='1234'; $THEME='real-madrid,navidad,terror,american-sports,autos,animales,mar,barcos,espacio,paisajes'; $APPS='netflix,youtube,disney'; $BOTONES='bloquear'; [Net.ServicePointManager]::SecurityProtocol='Tls12'; irm https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.ps1 | iex
 
 Nombres que entiende (sirven en Fire TV y en Google TV / onn; mayúsculas, espacios, guiones y "+" dan igual):
 
@@ -316,6 +317,10 @@ Los tres APK son compilaciones *debug* firmadas con la misma llave (necesario pa
 
 ## Cambios
 
+- **2026-11-02b:** **Foco verde también en el logo.** Al seleccionar una app del inicio, además del borde verde
+  luminoso, el **logo de la app se pinta del mismo verde** (los logos oficiales blancos y la silueta blanca de las demás
+  apps). Aparece suave en ~0.3 s junto con el borde y vuelve a blanco al salir. Nada más cambia. APK nuevos (misma
+  firma; se actualizan con `adb install -r`, conservan tema, PIN, dock y ajustes).
 - **2026-11-02a:** **Dock nuevo "cálido" (diseño calido-b, tamaño B).** Todas las apps del inicio son ahora tarjetas
   iguales de vidrio ahumado grafito cálido (196×122 px a 1080p, separación ~22 px): degradado más claro arriba y más
   oscuro abajo, brillo suave arriba, sombra suave debajo y un borde fino luminoso más claro arriba. Se quitaron la

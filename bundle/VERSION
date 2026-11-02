@@ -1,4 +1,1 @@
-luk-home-installer 2026-11-02a (dock cálido calido-b: tarjetas de vidrio grafito con logo blanco y nombre, foco verde que respira; opción --bloquear-botones para los botones de apps del control)
-luk-home.apk = glass-luk.apk (API 30+)
-luk-home-fos7.apk = main source -PfireOs7 (API 28-29)
-luk-home-fos6.apk = glass-luk-fos6.apk, variant fos6 -PfireOs6 (API 25-27)
+luk-home-installer 2026-11-02b (dock cálido calido-b con foco verde: borde y logo de la app en verde al seleccionarla; opción --bloquear-botones para los botones de apps del control)
