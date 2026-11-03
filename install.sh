@@ -25,6 +25,7 @@
 #   --dry-run        hace todo (descargas, conexión, lecturas, respaldo) pero NO escribe nada en el TV ni pulsa teclas
 #   --nuevo-dock     reescribe el dock (Stremio, IPTV Smarters, TizenTube) aunque Luk Home ya tenga uno
 #   --sin-actualizar no revisa si hay versión nueva de Stremio / IPTV Smarters / TizenTube (también LUK_NOUPDATE=1)
+#   --sin-apps       no instala Stremio / IPTV Smarters / TizenTube si faltan en el TV (también LUK_SINAPPS=1)
 #   --bloquear-botones    los botones de apps del control (Netflix, Prime, YouTube...) no hacen nada (LUK_BOTONES=bloquear)
 #                         Google TV / onn: el botón no hace nada. Fire TV: si la app no está instalada, la página
 #                         de la tienda que abre se cierra sola; las apps instaladas (ej. Prime Video) sí se abren.
@@ -34,9 +35,10 @@
 #                         Sin --estilo el TV se queda con el que tenga (uno nuevo empieza en oscuro). En el TV se cambia
 #                         en el botón de Temas (paleta), sección "Estilo".
 #
-# Solo modo "launcher": no borra ni desinstala ninguna app del cliente. Lo único que toca de sus apps es
-# actualizar (adb install -r, conserva datos y sesiones) Stremio / IPTV Smarters / TizenTube si ya están
-# instaladas y hay una versión oficial más nueva con la misma firma.
+# Solo modo "launcher": no borra ni desinstala ninguna app del cliente. Lo único que toca de apps es
+# Stremio / IPTV Smarters / TizenTube (paso 8): si ya están, las actualiza (adb install -r, conserva datos y
+# sesiones) cuando hay una versión oficial más nueva con la misma firma; si no están, instala la oficial
+# (adb install -g) para el procesador y el Android del TV, y las agrega al dock. Ninguna otra app se toca.
 # Variables para pruebas: LUK_BUNDLE_URL (zip del repo), LUK_ADB (usar otro adb), LUK_HOME_DIR (carpeta de trabajo).
 
 main() {
@@ -56,7 +58,7 @@ main() {
 
   # ---------- argumentos ----------
   local APPS_ENV="${APPS:-}"   # variable APPS= de afuera (antes de que la tape la local)
-  local IP="" PIN="" THEME="" THEME_GIVEN=0 CITY="" CITY_SKIP=0 APPS="" APPS_NEXT=0 NPOS=0 DRY=0 NEW_DOCK=0 NOUPD="${LUK_NOUPDATE:-0}" BTN="${LUK_BOTONES:-}" ESTILO_ARG="${ESTILO:-${LUK_ESTILO:-}}" a
+  local IP="" PIN="" THEME="" THEME_GIVEN=0 CITY="" CITY_SKIP=0 APPS="" APPS_NEXT=0 NPOS=0 DRY=0 NEW_DOCK=0 NOUPD="${LUK_NOUPDATE:-0}" NOAPPS="${LUK_SINAPPS:-0}" BTN="${LUK_BOTONES:-}" ESTILO_ARG="${ESTILO:-${LUK_ESTILO:-}}" a
   for a in "$@"; do
     if [ "$APPS_NEXT" = 1 ]; then APPS="$a"; APPS_NEXT=0; continue; fi
     case "$a" in
@@ -65,12 +67,13 @@ main() {
       --bloquear-botones) BTN=bloquear ;;
       --desbloquear-botones|--botones-normales) BTN=normal ;;
       --sin-actualizar|--no-update) NOUPD=1 ;;
+      --sin-apps|--no-apps|--no-instalar-apps) NOAPPS=1 ;;
       --apps) APPS_NEXT=1 ;;
       --apps=*) APPS="${a#--apps=}" ;;
       --estilo=*) ESTILO_ARG="${a#--estilo=}" ;;
       --oscuro) ESTILO_ARG=oscuro ;;
       --colores) ESTILO_ARG=colores ;;
-      -h|--help) sed -n '2,32p' "$0" 2>/dev/null || true; return 0 ;;
+      -h|--help) sed -n '2,33p' "$0" 2>/dev/null || true; return 0 ;;
       -|--) NPOS=$((NPOS + 1))
          case "$NPOS" in 2) PIN="-" ;; 4) CITY_SKIP=1 ;; 3) THEME="todos" ;; esac ;;   # "-" = no cambiar / por defecto
       -*) printf 'Opción desconocida: %s\n' "$a"; return 2 ;;
@@ -84,6 +87,7 @@ main() {
   IP="${IP:-${LUK_IP:-}}"; PIN="${PIN:-${LUK_PIN:-}}"
   if [ -z "$THEME" ] && [ -n "${LUK_THEME:-}" ]; then THEME="$LUK_THEME"; THEME_GIVEN=1; fi
   case "$NOUPD" in 1|si|sí|yes|true) NOUPD=1 ;; *) NOUPD=0 ;; esac
+  case "$NOAPPS" in 1|si|sí|yes|true) NOAPPS=1 ;; *) NOAPPS=0 ;; esac
   # Estilo de las tarjetas del inicio (files/dock-style.txt, 2026-11-02d): oscuro | colores | vacío = no cambiar
   case "$(printf '%s' "$ESTILO_ARG" | tr 'A-Z' 'a-z' | tr -d ' ')" in
     '') ESTILO_ARG="" ;;
@@ -120,6 +124,7 @@ main() {
   aviso() { say "   ${Y}!${N} $*"; }
   sim()   { say "   ${Y}[simulación]${N} $*"; }
 
+  NEW_INST="" APPS_TOUCHED=0 DOCK_TOUCHED=0
   SERIAL="" ADB="" ACC_CHANGED=0 HOME_CHANGED=0 UOP_CHANGED=0 SUCCESS=0
   OLD_SVC="" OLD_EN="" OLD_HOME="" OLD_UOP="" BK="" STAGE="" BUNDLE=""
   USE_ACC=1 USE_UOP=0   # Fire OS 6: sin accesibilidad (Amazon no la deja correr), con "acceso de uso" (GET_USAGE_STATS)
@@ -318,14 +323,15 @@ PLEOF
   isnum() { case "$1" in ''|*[!0-9]*) return 1 ;; esac; return 0; }
   vgt() { awk -v a="$1" -v b="$2" 'BEGIN{n=split(a,x,/[^0-9]+/);m=split(b,y,/[^0-9]+/);k=n>m?n:m;for(i=1;i<=k;i++){if(x[i]+0>y[i]+0)exit 0;if(x[i]+0<y[i]+0)exit 1}exit 1}'; }
   # Versiones oficiales conocidas cuyo versionCode no viene en el nombre (evita bajar 78 MB solo para leerlo).
-  local KNOWN_VC="iptv-smarters-4.0.6.apk=106"
-  local KNOWN_SHA="iptv-smarters-4.0.6.apk=07768dd9b805d129a84698e4d3163d1fbb2340c80ba118dbaa7bbcfe4cf5e01b"
+  local KNOWN_VC="iptv-smarters-4.0.6.apk=106 iptv-smarters-5.0.apk=108"
+  local KNOWN_SHA="iptv-smarters-4.0.6.apk=07768dd9b805d129a84698e4d3163d1fbb2340c80ba118dbaa7bbcfe4cf5e01b iptv-smarters-5.0.apk=b0db9468428b537719f45fcfb1e0981b41e36ea9bc3772e06daff76c335f90a9"
   local SMARTERS_PIN="iptv-smarters-4.0.6.apk"   # si www.iptvsmarters.com no contesta
   local R_URL R_ALT R_FILE R_VN R_VC R_SHA
-  # Última versión oficial: $1=app $2=abi (arm64-v8a | armeabi-v7a)
+  # Versión oficial: $1=app $2=abi (arm64-v8a | armeabi-v7a) [$3=0 la última, 1, 2... versiones oficiales
+  # anteriores, para un TV donde la última no es compatible]. 1 = no hay (o no se pudo consultar).
   remote_info() {
     R_URL="" R_ALT="" R_FILE="" R_VN="" R_VC="" R_SHA=""
-    local page u f v c best=0 tag asset kv
+    local page u f v c best=0 tag asset kv idx="${3:-0}" lst
     case "$1" in
       stremio)   # www.stremio.com/downloads: solo los APK de Android TV, sin rc/beta
         page=$(curl -fsSL --connect-timeout 15 -m 60 https://www.stremio.com/downloads 2>>"$LOG") || return 1
@@ -335,10 +341,31 @@ PLEOF
           v=${f#com.stremio.one-}; v=${v%-"$2".apk}; c=${v##*-}; v=${v%-*}
           case "$v" in ''|*[!0-9.]*) continue ;; esac
           isnum "$c" || continue
-          if [ "$c" -gt "$best" ]; then best=$c; R_URL=$u; R_FILE=$f; R_VN=$v; R_VC=$c; fi
-        done ;;
+          lst="${lst:-}$c $u $f $v
+"
+        done
+        [ -n "${lst:-}" ] || return 1
+        read -r c u f v <<EOS
+$(printf '%s' "$lst" | sort -rn -k1,1 | sed -n "$((idx + 1))p")
+EOS
+        [ -n "${u:-}" ] || return 1
+        R_URL=$u; R_FILE=$f; R_VN=$v; R_VC=$c ;;
       tizentube)  # GitHub reisxd/TizenTubeCobalt (última release; trae el sha256 de cada archivo)
         case "$2" in arm64-v8a) asset=cobalt-arm64.apk ;; armeabi-v7a) asset=cobalt-arm.apk ;; *) return 1 ;; esac
+        if [ "$idx" -gt 0 ]; then   # versiones anteriores: lista de releases (sin borradores ni pre-releases), con sha256
+          lst=$(curl -fsSL --connect-timeout 15 -m 60 -H 'Accept: application/vnd.github+json' "https://api.github.com/repos/reisxd/TizenTubeCobalt/releases?per_page=15" 2>>"$LOG" | tr ',' '\n' \
+            | awk -v a="\"$asset\"" '/"tag_name":/ {t=$0; sub(/.*"tag_name": *"/,"",t); sub(/".*/,"",t); pre=0; dr=0; cur=0}
+                /"prerelease": *true/ {pre=1} /"draft": *true/ {dr=1}
+                /"name":/ {cur=index($0,a)>0}
+                cur && /"digest":/ {d=$0; sub(/.*sha256:/,"",d); sub(/".*/,"",d); if (!pre && !dr && t != "") print t, d; cur=0}' \
+            | sed -n "$((idx + 1))p")
+          tag=${lst%% *}; R_SHA=${lst#* }
+          case "$tag" in ''|*[!A-Za-z0-9._-]*) return 1 ;; esac
+          case "$R_SHA" in *[!0-9a-f]*|'') return 1 ;; esac
+          R_URL="https://github.com/reisxd/TizenTubeCobalt/releases/download/$tag/$asset"
+          R_VN=${tag#v}; R_FILE="tizentube-$R_VN-$asset"
+          return 0
+        fi
         page=$(curl -fsSL --connect-timeout 15 -m 60 -H 'Accept: application/vnd.github+json' https://api.github.com/repos/reisxd/TizenTubeCobalt/releases/latest 2>>"$LOG" | tr ',' '\n')
         tag=$(printf '%s\n' "$page" | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -1)
         if [ -n "$tag" ]; then
@@ -355,6 +382,10 @@ PLEOF
           if [ -z "$R_FILE" ] || vgt "${f#iptv-smarters-}" "${R_FILE#iptv-smarters-}"; then R_FILE=$f; fi
         done
         [ -n "$R_FILE" ] || R_FILE=$SMARTERS_PIN
+        if [ "$idx" -gt 0 ]; then   # anterior conocida: la fija ($SMARTERS_PIN), si la última es otra
+          [ "$idx" = 1 ] && [ "$R_FILE" != "$SMARTERS_PIN" ] || return 1
+          R_FILE=$SMARTERS_PIN
+        fi
         R_URL="https://www.iptvsmarters.com/$R_FILE"; R_ALT="https://www.smartersott.app/$R_FILE"
         R_VN=${R_FILE#iptv-smarters-}; R_VN=${R_VN%.apk} ;;
     esac
@@ -426,6 +457,7 @@ PLEOF
         dump=$(S dumpsys package "$p")
         nvn=$(printf '%s\n' "$dump" | sed -n 's/.*versionName=\([^ ]*\).*/\1/p' | head -1)
         u=$(printf '%s\n' "$dump" | sed -n 's/.*versionCode=\([0-9]*\).*/\1/p' | head -1)
+        APPS_TOUCHED=1
         if [ "$u" = "$avc" ]; then say "   ${G}⬆${N} $nm actualizada $ivn → ${nvn:-$avn}"; upd_add "$nm $ivn → ${nvn:-$avn}"
         else aviso "$nm: el TV aceptó la actualización pero sigue mostrando la ${nvn:-$ivn}; revisa la app"; upd_add "$nm ${nvn:-$ivn} (revisar)"; fi ;;
       *UPDATE_INCOMPATIBLE*|*SIGNATURE*)
@@ -439,17 +471,190 @@ PLEOF
     esac
     return 0
   }
-  actualizar_apps() {
-    paso 8 "Revisando actualizaciones de apps"
-    if [ "$NOUPD" = 1 ]; then bien "Omitido (--sin-actualizar)"; UPD_SUM="no se revisaron (--sin-actualizar)"; return 0; fi
-    if ! inlist com.stremio.one "$INSTALLED" && ! inlist com.nst.iptvsmarterstvbox "$INSTALLED" && ! inlist io.gh.reisxd.tizentube.cobalt "$INSTALLED"; then
-      bien "Ni Stremio, ni IPTV Smarters, ni TizenTube están instaladas: nada que revisar"; UPD_SUM="ninguna instalada"; return 0
+  # Baja el APK oficial de R_URL / R_ALT a $WORK/apps/<app>/ y comprueba el sha256 oficial (si se conoce).
+  # $1=app $2=nombre. Deja la ruta en APK_F. 1 = no se pudo (ya avisó).
+  local APK_F=""
+  bajar_apk() {
+    local dir="$WORK/apps/$1" u
+    APK_F="$dir/$R_FILE"; mkdir -p "$dir"
+    if [ -f "$APK_F" ] && { [ -z "$R_SHA" ] || [ "$(sha "$APK_F")" = "$R_SHA" ]; } && apkinfo "$APK_F" >/dev/null; then
+      say "   $2 $R_VN ya estaba descargada en esta computadora"; return 0
     fi
-    command -v perl >/dev/null 2>&1 || aviso "Esta computadora no tiene perl: solo se puede comparar sin descargar"
+    rm -f "$APK_F" "$APK_F.part"
+    say "   Descargando $2 $R_VN (oficial; solo esta vez, queda guardada)..."
+    for u in $R_URL $R_ALT; do
+      if [ -t 2 ]; then curl -fL --retry 2 --connect-timeout 20 --progress-bar -o "$APK_F.part" "$u"; else curl -fL --retry 2 --connect-timeout 20 -sS -o "$APK_F.part" "$u" >>"$LOG" 2>&1; fi
+      [ -s "$APK_F.part" ] && [ "$(head -c 2 "$APK_F.part")" = PK ] && break
+      rm -f "$APK_F.part"; logq "inst $1: descarga falló desde $u"
+    done
+    if [ ! -s "$APK_F.part" ]; then aviso "$2: no se pudo descargar la versión $R_VN; no se instala"; return 1; fi
+    if [ -n "$R_SHA" ] && [ "$(sha "$APK_F.part")" != "$R_SHA" ]; then
+      rm -f "$APK_F.part"; aviso "$2: el archivo descargado no coincide con el oficial (sha256); no se instala"; return 1
+    fi
+    mv "$APK_F.part" "$APK_F"
+    return 0
+  }
+  # La app NO está en el TV: se instala la versión oficial (adb install -g) para el procesador y el Android del TV.
+  # Si la última pide un Android más nuevo, prueba versiones oficiales anteriores; si ninguna sirve, avisa y sigue.
+  inst_app() {   # $1=app $2=paquete $3=nombre
+    local app=$1 p=$2 nm=$3 abis abi idx info apkg avc avn amin out need tried="" got=0
+    if [ "$NOAPPS" = 1 ]; then logq "inst $p: no instalada, --sin-apps"; bien "$nm no está en el TV (no se instala: --sin-apps)"; upd_add "$nm no instalada"; return 0; fi
+    case "$app" in
+      smarters) abis=universal ;;   # un solo APK para todos los procesadores
+      *) case "$CPU_ABI" in
+           arm64*) abis="arm64-v8a armeabi-v7a" ;;   # si no hay de 64 bits, la de 32 bits también corre
+           armeabi*|'') abis=armeabi-v7a ;;
+           *) abis=$CPU_ABI ;;
+         esac ;;
+    esac
+    logq "inst $p: no instalada; abi=$CPU_ABI -> $abis api=$SDK"
+    for abi in $abis; do
+      idx=0
+      while [ "$idx" -le 3 ]; do
+        remote_info "$app" "$abi" "$idx" || break
+        idx=$((idx + 1)); got=1
+        logq "inst $p: oficial[$((idx - 1))] abi=$abi file=$R_FILE vn=$R_VN vc=$R_VC sha=$R_SHA url=$R_URL"
+        bajar_apk "$app" "$nm" || { upd_add "$nm no se pudo instalar"; return 0; }
+        info=$(apkinfo "$APK_F") || info=""
+        set -- $info; apkg=${1:-}; avc=${2:-}; avn=${3:-}; amin=${4:-1}
+        logq "inst $p: archivo $APK_F -> $info"
+        if [ -z "$info" ]; then aviso "$nm: no pude leer el archivo descargado (falta perl o archivo dañado); no se instala"; rm -f "$APK_F"; upd_add "$nm no se pudo instalar"; return 0; fi
+        if [ "$apkg" != "$p" ] || ! isnum "$avc"; then aviso "$nm: el archivo descargado no es $nm ($apkg); no se instala"; rm -f "$APK_F"; upd_add "$nm no se pudo instalar"; return 0; fi
+        if isnum "$amin" && [ "$amin" -gt "$SDK" ]; then
+          aviso "$nm $avn necesita Android API $amin y este TV es API $SDK; busco una versión oficial anterior que sirva..."
+          tried="$tried $avn"; continue
+        fi
+        need=$(( $(wc -c < "$APK_F") / 1024 * 2 + 50000 ))
+        FREE=$(S df -k /data | awk 'NR>1 {v=$4} END {print v+0}')
+        if [ "${FREE:-0}" -gt 0 ] && [ "$FREE" -lt "$need" ]; then
+          aviso "$nm: no hay espacio en el TV para instalarla ($((FREE / 1024)) MB libres, hacen falta ~$((need / 1024)) MB); no se instala"; upd_add "$nm sin espacio"; return 0
+        fi
+        if [ "$DRY" = 1 ]; then
+          sim "adb install -g $R_FILE   ($nm $avn, $abi, Android API $amin+; no estaba en el TV)"
+          NEW_INST="$NEW_INST $p"; upd_add "$nm $avn instalada (simulado)"; return 0
+        fi
+        say "   Instalando $nm $avn (no estaba en el TV; puede tardar 1-2 minutos)..."
+        case "$PLATFORM" in Google*) say "   (Si en el TV sale un aviso de Play Protect, elige \"Instalar de todas formas\".)" ;; esac
+        out=$(A install -g "$APK_F" 2>&1 | tr -d '\r'); logq "inst $p install: $out"
+        case "$out" in
+          *Success*)
+            if S pm path "$p" | grep -q package:; then
+              INSTALLED="$INSTALLED$p "; NEW_INST="$NEW_INST $p"
+              say "   ${G}✚${N} $nm $avn instalada"; upd_add "$nm $avn instalada"
+            else aviso "$nm: el TV dijo que la instaló pero no aparece; revisa la app"; upd_add "$nm (revisar)"; fi ;;
+          *NO_MATCHING_ABIS*|*CPU_ABI_INCOMPATIBLE*)
+            if [ "$abi" = arm64-v8a ]; then aviso "$nm $avn de 64 bits no sirve en este TV; pruebo la de 32 bits..."; continue 2; fi
+            aviso "$nm $avn no es para el procesador de este TV; no se instala"; upd_add "$nm no compatible con este TV" ;;
+          *OLDER_SDK*)
+            aviso "$nm $avn no es compatible con este TV (API $SDK); busco una versión oficial anterior que sirva..."
+            tried="$tried $avn"; continue ;;
+          *INSUFFICIENT_STORAGE*) aviso "$nm: el TV no tiene espacio para instalarla; no se instala"; upd_add "$nm sin espacio" ;;
+          *ALREADY_EXISTS*|*UPDATE_INCOMPATIBLE*|*SIGNATURE*|*DUPLICATE*)
+            aviso "$nm: el TV ya tiene una copia escondida o de otra fuente; no se toca"; upd_add "$nm no se tocó" ;;
+          *) aviso "$nm: la instalación falló ($(printf '%s' "$out" | grep -v '^Performing' | tail -1)); se sigue con lo demás"; upd_add "$nm no se pudo instalar" ;;
+        esac
+        return 0
+      done
+    done
+    if [ -n "$tried" ]; then
+      aviso "$nm: ninguna versión oficial reciente funciona en este TV (Android API $SDK; probadas:$tried); no se instala"; upd_add "$nm no compatible con este TV"
+    elif [ "$got" = 0 ]; then
+      aviso "$nm: no pude consultar la versión oficial para este TV (internet, la página cambió o no hay para $CPU_ABI); no se instala"; upd_add "$nm no se pudo instalar"
+    else
+      aviso "$nm: no se encontró una versión oficial para este TV; no se instala"; upd_add "$nm no se pudo instalar"
+    fi
+    return 0
+  }
+  # Apps recién instaladas en el paso 8: se agregan al dock de Luk Home (con su ícono).
+  # Dock nuevo de esta corrida: orden Stremio, IPTV Smarters, TizenTube y luego las apps extra.
+  # Dock que ya tenía el TV: se deja tal cual y se agregan al final las que falten.
+  dock_nuevas() {
+    [ -n "$NEW_INST" ] || return 0
+    local d p cur have added="" nt=0 out
+    d=$(mktemp -d "${TMPDIR:-/tmp}/lukapps.XXXXXX")/lukhome; mkdir -p "$d/tiles"
+    if [ "$DOCK_MODE" != nuevo ]; then
+      if [ "$DRY" = 1 ]; then cur=$(cat "$BK/dock-antes.txt" 2>/dev/null); [ "$DOCK_MODE" = extra ] && cur="$cur
+$(printf '%s\n' $EXTRA_PKGS)"
+      else cur=$(S run-as "$PKG" cat files/dock.txt); fi
+      case "$cur" in *"No such file"*|*"run-as:"*) cur="" ;; esac
+    fi
+    if [ "$DOCK_MODE" = nuevo ] || [ -z "$(printf '%s\n' "$cur" | grep -v '^#' | tr -d ' ')" ]; then
+      printf '# Apps del inicio, en orden\n' > "$d/dock.txt"
+      for p in $DOCK_APPS; do
+        inlist "$p" "$INSTALLED" || inlist "$p" "$NEW_INST" || continue
+        echo "$p" >> "$d/dock.txt"
+      done
+      for p in $EXTRA_PKGS; do inlist "$p" "$DOCK_APPS" || echo "$p" >> "$d/dock.txt"; done
+      for p in $NEW_INST; do added="$added, $(cat "$BUNDLE/tiles/$p.txt" 2>/dev/null || echo "$p")"; done
+    else
+      printf '%s\n' "$cur" > "$d/dock.txt"
+      have=" $(grep -v '^#' "$d/dock.txt" | tr -d ' \r' | tr '\n' ' ') "
+      for p in $DOCK_APPS; do
+        inlist "$p" "$NEW_INST" || continue
+        inlist "$p" "$have" && continue
+        echo "$p" >> "$d/dock.txt"; have="$have$p "; added="$added, $(cat "$BUNDLE/tiles/$p.txt" 2>/dev/null || echo "$p")"
+      done
+    fi
+    for p in $NEW_INST; do
+      if [ -f "$BUNDLE/tiles/$p.png" ]; then cp "$BUNDLE/tiles/$p.png" "$d/tiles/"; [ -f "$BUNDLE/tiles/$p.txt" ] && cp "$BUNDLE/tiles/$p.txt" "$d/tiles/"; nt=$((nt + 1)); fi
+    done
+    cp "$BUNDLE/tv-apply.sh" "$d/tv-apply.sh"
+    logq "dock_nuevas: mode=${DOCK_MODE:-existente} new=$NEW_INST dock=$(grep -v '^#' "$d/dock.txt" | tr '\n' ' ')"
+    if [ -z "$added" ]; then bien "Dock: las apps nuevas ya estaban en el inicio"; rm -rf "$(dirname "$d")"; return 0; fi
+    if [ "$DRY" = 1 ]; then
+      sim "adb push lukhome/ → /data/local/tmp/ y tv-apply.sh  (escribe: tiles/ ($nt íconos), dock.txt)"
+      sim "dock.txt = $(grep -v '^#' "$d/dock.txt" | tr '\n' ' ')"
+      rm -rf "$(dirname "$d")"; return 0
+    fi
+    A shell rm -rf /data/local/tmp/lukhome >/dev/null 2>&1
+    out=$(A push "$d" /data/local/tmp/ 2>&1 | tr -d '\r'); logq "push apps: $out"
+    out=$(A shell sh /data/local/tmp/lukhome/tv-apply.sh 2>&1 | tr -d '\r'); logq "apply apps: $out"
+    rm -rf "$(dirname "$d")"
+    case "$out" in
+      *LUK_APPLY_OK*) DOCK_TOUCHED=1; bien "Dock: se agregan al inicio:${added#,}" ;;
+      *) A shell rm -rf /data/local/tmp/lukhome >/dev/null 2>&1
+         aviso "No pude agregar las apps nuevas al dock ($(printf '%s' "$out" | grep LUK_APPLY_FAIL | head -1)); están en \"Otras apps\". Vuelve a correr la línea para ponerlas." ;;
+    esac
+    return 0
+  }
+  # Después de instalar o actualizar apps: Luk Home de nuevo en pantalla (y recarga el dock). Sin teclas.
+  volver_luk() {
+    [ -n "$NEW_INST" ] || [ "$APPS_TOUCHED" = 1 ] || return 0
+    if [ "$DRY" = 1 ]; then sim "abrir Luk Home otra vez (am start --ez reload true) para que muestre el dock al día"; return 0; fi
+    local top=""
+    A shell am start -n "$PKG/.HomeActivity" --ez reload true >>"$LOG" 2>&1
+    for _ in 1 2 3 4 5 6; do
+      sleep 1.5
+      top=$(S dumpsys activity activities | grep -m1 -E 'mResumedActivity|topResumedActivity')
+      case "$top" in *"$PKG"*) break ;; esac
+    done
+    logq "volver_luk: $top"
+    case "$top" in
+      *"$PKG"*) bien "Luk Home de nuevo en pantalla$( [ "$DOCK_TOUCHED" = 1 ] && echo ', con el dock al día')" ;;
+      *) aviso "Pulsa el botón Inicio (la casita) del control para volver a Luk Home." ;;
+    esac
+  }
+  app_paso() {   # $1=app $2=paquete $3=nombre: actualiza si está, instala si falta
+    if inlist "$2" "$INSTALLED"; then
+      if [ "$NOUPD" = 1 ]; then logq "upd $2: instalada, --sin-actualizar"; upd_add "$3 sin revisar"; return 0; fi
+      upd_app "$@"
+    else
+      inst_app "$@"
+    fi
+  }
+  actualizar_apps() {
+    paso 8 "Apps: Stremio, IPTV Smarters y TizenTube (instalar o actualizar)"
+    NEW_INST="" APPS_TOUCHED=0 DOCK_TOUCHED=0
+    if [ "$NOUPD" = 1 ] && [ "$NOAPPS" = 1 ]; then bien "Omitido (--sin-actualizar y --sin-apps)"; UPD_SUM="no se revisaron (--sin-actualizar --sin-apps)"; return 0; fi
+    [ "$NOUPD" = 1 ] && bien "Las que ya están no se actualizan (--sin-actualizar)"
+    [ "$NOAPPS" = 1 ] && bien "Las que faltan no se instalan (--sin-apps)"
+    command -v perl >/dev/null 2>&1 || aviso "Esta computadora no tiene perl: no se pueden revisar los archivos de las apps"
     UPD_SUM=""
-    upd_app stremio com.stremio.one "Stremio"
-    upd_app smarters com.nst.iptvsmarterstvbox "IPTV Smarters"
-    upd_app tizentube io.gh.reisxd.tizentube.cobalt "TizenTube"
+    app_paso stremio com.stremio.one "Stremio"
+    app_paso smarters com.nst.iptvsmarterstvbox "IPTV Smarters"
+    app_paso tizentube io.gh.reisxd.tizentube.cobalt "TizenTube"
+    dock_nuevas
+    volver_luk
     return 0
   }
 
@@ -476,7 +681,7 @@ PLEOF
     PIN_HASH=$(printf '%s' "$PIN" | { if command -v shasum >/dev/null 2>&1; then shasum -a 256; else sha256sum; fi; } | awk '{print $1}')
   fi
   case "$IP" in *:*) SERIAL="$IP" ;; *) SERIAL="$IP:5555" ;; esac
-  logq "ip=$IP theme=$THEME city=${CITY:-(sin cambio)} apps=${APPS:-(ninguna)} dry=$DRY new_dock=$NEW_DOCK noupdate=$NOUPD buttons=${BTN:-(sin cambio)} estilo=${ESTILO_ARG:-(sin cambio)} pin_set=$([ -n "$PIN" ] && echo yes || echo no) os=$(uname -a)"
+  logq "ip=$IP theme=$THEME city=${CITY:-(sin cambio)} apps=${APPS:-(ninguna)} dry=$DRY new_dock=$NEW_DOCK noupdate=$NOUPD noapps=$NOAPPS buttons=${BTN:-(sin cambio)} estilo=${ESTILO_ARG:-(sin cambio)} pin_set=$([ -n "$PIN" ] && echo yes || echo no) os=$(uname -a)"
 
   # ---------- 1. herramientas ----------
   paso 1 "Preparando las herramientas (solo la primera vez tarda un poco)"
@@ -663,6 +868,9 @@ PLEOF
   fi
   local LUK_PRESENT=0 LUK_SHA="" HAS_DOCK=0 HAS_THEME=0 TV_THEMES="" TH_PREV=""
   local ABIS; ABIS=$(S getprop ro.product.cpu.abilist); [ -n "$ABIS" ] || ABIS=$(S getprop ro.product.cpu.abi)
+  # ABI principal (la que usa el sistema): Fire TV de 64 bits con Android de 32 bits dicen armeabi-v7a
+  local CPU_ABI; CPU_ABI=$(S getprop ro.product.cpu.abi); [ -n "$CPU_ABI" ] || CPU_ABI=${ABIS%%,*}
+  logq "abi=$CPU_ABI abilist=$ABIS"
   if inlist "$PKG" "$INSTALLED"; then
     LUK_PRESENT=1
     OLD_UOP=$(S appops get "$PKG" GET_USAGE_STATS | sed -n 's/^GET_USAGE_STATS: \([a-z]*\).*/\1/p' | head -1)
@@ -792,9 +1000,13 @@ EOS
       inlist "$p" "$DOCK_APPS" && continue
       echo "$p" >> "$STAGE/dock.txt"; ndock=$((ndock + 1)); added="$added, $(app_label "$p")"
     done
+    DOCK_MODE=nuevo
     bien "Dock: $ndock app(s) en el inicio; las demás quedan en \"Otras apps\""
     [ -n "$added" ] && bien "Apps extra en el inicio:${added#,}"
-    [ -n "$missing" ] && aviso "No están instaladas (no van al dock):${missing#,}"
+    if [ -n "$missing" ]; then
+      if [ "$NOAPPS" = 1 ]; then aviso "No están instaladas (no van al dock; --sin-apps):${missing#,}"
+      else bien "Todavía no están en el TV:${missing#,} (se instalan en el paso 8 y se agregan al dock)"; fi
+    fi
   fi
   if [ -f "$STAGE/dock.txt" ] && [ "$(grep -v '^#' "$STAGE/dock.txt" | grep -c .)" -gt 20 ]; then
     aviso "El inicio muestra máximo 20 apps; las que pasen de 20 quedan en \"Otras apps\""

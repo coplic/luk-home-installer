@@ -11,7 +11,7 @@ Ten a mano el control del TV y una computadora conectada **al mismo WiFi que el 
    - **Mac:** pulsa `Cmd + Espacio`, escribe **Terminal** y pulsa Enter.
    - **Windows:** pulsa el botón Inicio, escribe **PowerShell** y ábrelo (no hace falta "como administrador").
 
-3. **Pega la línea que te mandamos** y pulsa Enter. Verás los pasos 1 a 8. El paso 8 revisa si Stremio, IPTV Smarters o TizenTube tienen versión nueva y las actualiza sin borrar tus datos ni sesiones (la primera vez puede tardar unos minutos en descargar).
+3. **Pega la línea que te mandamos** y pulsa Enter. Verás los pasos 1 a 8. El paso 8 instala Stremio, IPTV Smarters y TizenTube si no las tienes (y las pone en el inicio de Luk Home), y si ya las tienes revisa si hay versión nueva y las actualiza sin borrar tus datos ni sesiones (la primera vez puede tardar unos minutos en descargar).
 
 4. **Mira el TV:** cuando aparezca **"¿Permitir la depuración USB?"**, marca *"Permitir siempre desde esta computadora"* y pulsa **Permitir / Aceptar**.
    (En Google TV puede salir un aviso de Play Protect: elige **"Instalar de todas formas"**.)

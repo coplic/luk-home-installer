@@ -2,8 +2,11 @@
 
 Instala el launcher **Luk Home** en el Fire TV / Google TV de un cliente desde **su** computadora (Mac o Windows), con una sola línea.
 Modo **solo launcher**: no borra apps, no desinstala nada (tampoco Projectivy u otros launchers), no cambia ajustes de otras apps.
-Lo único que toca de las apps del cliente: si **Stremio, IPTV Smarters o TizenTube** ya están instaladas y hay una versión oficial
-**más nueva**, las actualiza con `adb install -r` (conserva datos y sesiones). Ver paso 8.
+Lo único que toca de las apps del cliente son **Stremio, IPTV Smarters y TizenTube**: si ya están y hay una versión oficial
+**más nueva**, las actualiza con `adb install -r` (conserva datos y sesiones); si **no están**, descarga la oficial, la instala
+con `adb install -g` y la pone en el dock de Luk Home. Ninguna otra app se instala, se quita ni se actualiza. Ver paso 8.
+Para no instalar las que faltan: `--sin-apps` (Windows `$SINAPPS=1;`); para no actualizar las que ya están: `--sin-actualizar`
+(Windows `$NOUPDATE=1;`).
 
 ## Copiar y pegar: línea con todos los temas
 
@@ -16,6 +19,10 @@ La línea tiene 7 partes separadas por **espacios**: IP, PIN, TEMAS, CIUDAD, APP
 - **APPS** extra en el inicio, junto a Stremio, IPTV Smarters y TizenTube: cambia `netflix,youtube,disney` por las apps del cliente, o pon `todas`. Si no quieres apps extra, borra esa última parte (en Windows borra `$APPS='...';`).
 - **BOTONES**: `--bloquear-botones` deja sin efecto los botones de apps del control (Netflix, Prime, etc.) para que no abran la tienda a descargar apps. En Fire TV solo se frenan los de apps que no están instaladas. Si no lo quieres, borra esa parte (en Windows borra `$BOTONES='bloquear';`).
 - **ESTILO** de las tarjetas del inicio: `--estilo=oscuro` = tarjetas oscuras con el logo blanco que se pone verde al pasar por encima (el normal). Cambia `oscuro` por `colores` para tarjetas de colores (con rayas, brillo y el logo en una bolita). En Windows es `$ESTILO='oscuro';` o `$ESTILO='colores';`. Si borras esa parte, el TV se queda con el estilo que ya tenga (un TV nuevo empieza en oscuro). El cliente también lo puede cambiar después con el control: botón de **Temas** (la paleta, arriba) > **Estilo** > **Oscuro** o **Colores**.
+
+Además, sin escribir nada: el paso 8 **instala Stremio, IPTV Smarters y TizenTube si faltan** (y las agrega al dock) y
+**actualiza** las que ya están. Para no instalar las que faltan, agrega al final `--sin-apps` (Windows: `$SINAPPS=1;` antes de `[Net...`);
+para no actualizar las que ya están, `--sin-actualizar` (Windows: `$NOUPDATE=1;`).
 
 **Mac** (app Terminal):
 ```bash
@@ -103,7 +110,8 @@ Extras opcionales:
 |---|---|---|
 | Probar sin cambiar nada en el TV | `--simular` (o `--dry-run`) | `$DRYRUN=1;` |
 | Rehacer el dock aunque ya exista | `--nuevo-dock` | `$NUEVODOCK=1;` |
-| No revisar actualizaciones de Stremio / IPTV Smarters / TizenTube | `--sin-actualizar` (o `LUK_NOUPDATE=1`) | `$NOUPDATE=1;` |
+| No actualizar Stremio / IPTV Smarters / TizenTube si ya están (las que faltan se instalan igual) | `--sin-actualizar` (o `LUK_NOUPDATE=1`) | `$NOUPDATE=1;` |
+| No instalar Stremio / IPTV Smarters / TizenTube si faltan (las que están se actualizan igual) | `--sin-apps` (o `LUK_SINAPPS=1`) | `$SINAPPS=1;` |
 | Ciudad del tiempo (ver abajo) | 4.º valor después del tema, o `CIUDAD="Miami"` antes de `bash` | `$CIUDAD='Miami';` |
 | Apps extra en el inicio (ver abajo) | 5.º valor, o `--apps netflix,youtube`, o `APPS=netflix,youtube` antes de `bash` | `$APPS='netflix,youtube';` |
 | Botones de apps del control sin efecto (ver abajo) | `--bloquear-botones` (volver: `--desbloquear-botones`) | `$BOTONES='bloquear';` (volver: `$BOTONES='normal';`) |
@@ -145,17 +153,20 @@ Por defecto la ciudad es **automática** (por la IP de internet del cliente). Pa
 
 - **Mac:** 4.º valor después del tema (usa `todos` si no quieres elegir tema), entre comillas si lleva espacios:
   ```bash
-  curl -fsSL https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.sh | bash -s -- 192.168.0.x 1234 todos "Miami"
+  curl -fsSL https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.sh | bash -s -- 192.168.0.x 1234 todos "Miami" netflix,youtube,disney --bloquear-botones --estilo=oscuro
   ```
   o con variable: `curl -fsSL …/install.sh | CIUDAD="Madrid, España" bash -s -- 192.168.0.x 1234`
-- **Windows:** agrega `$CIUDAD='Miami';` antes de `irm` (p. ej. `$IP='192.168.0.x'; $PIN='1234'; $CIUDAD='Miami'; …`).
+- **Windows:** agrega `$CIUDAD='Miami';` antes de `irm`, p. ej.:
+  ```powershell
+  $IP='192.168.0.x'; $PIN='1234'; $THEME='todos'; $CIUDAD='Miami'; $APPS='netflix,youtube,disney'; $BOTONES='bloquear'; $ESTILO='oscuro'; [Net.ServicePointManager]::SecurityProtocol='Tls12'; irm https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.ps1 | iex
+  ```
 - Valores: un nombre (`Miami`, `Madrid, España`, `Ciudad de México`), coordenadas `25.76,-80.19`, o `auto` (volver a automática).
 - Sin CIUDAD el instalador no toca la ciudad que el cliente ya eligió en el TV. Con CIUDAD se conserva la línea `unidad=F` / `unidad=C` si el TV ya la tenía.
 
 ### Apps extra en el inicio (APPS, opcional)
 
 Pon en la fila de inicio otras apps **que el cliente ya tiene instaladas** (el instalador nunca instala, quita ni actualiza
-apps por esto). Van **después** de Stremio, IPTV Smarters y TizenTube, en el orden que escribas, sin repetir.
+apps por esto; solo Stremio, IPTV Smarters y TizenTube se instalan o actualizan, en el paso 8). Van **después** de Stremio, IPTV Smarters y TizenTube, en el orden que escribas, sin repetir.
 Nombres separados por comas, **sin espacios**. Si una app no está en el TV, se salta y avisa (no se detiene).
 
 En Mac es el **5.º valor**: IP, PIN, TEMA, CIUDAD, APPS. Si no quieres cambiar el tema pon todos; para la ciudad pon auto
@@ -170,11 +181,11 @@ Windows (PowerShell), línea lista para copiar:
 
 $IP='10.0.0.250'; $PIN='1234'; $THEME='real-madrid'; $CIUDAD='auto'; $APPS='netflix,youtube,disney'; $BOTONES='bloquear'; $ESTILO='oscuro'; [Net.ServicePointManager]::SecurityProtocol='Tls12'; irm https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.ps1 | iex
 
-Con todos los temas y apps extra (Mac y Windows):
+Con todos los temas y apps extra, sin tocar la ciudad que ya tiene el TV (`-` en Mac, `$CIUDAD='-';` en Windows):
 
 curl -fsSL https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.sh | bash -s -- 192.168.0.x 1234 real-madrid,real-madrid-2,navidad,terror,american-sports,autos,animales,mar,barcos,espacio,paisajes - netflix,youtube,disney --bloquear-botones --estilo=oscuro
 
-$IP='192.168.0.x'; $PIN='1234'; $THEME='real-madrid,real-madrid-2,navidad,terror,american-sports,autos,animales,mar,barcos,espacio,paisajes'; $APPS='netflix,youtube,disney'; $BOTONES='bloquear'; $ESTILO='oscuro'; [Net.ServicePointManager]::SecurityProtocol='Tls12'; irm https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.ps1 | iex
+$IP='192.168.0.x'; $PIN='1234'; $THEME='real-madrid,real-madrid-2,navidad,terror,american-sports,autos,animales,mar,barcos,espacio,paisajes'; $CIUDAD='-'; $APPS='netflix,youtube,disney'; $BOTONES='bloquear'; $ESTILO='oscuro'; [Net.ServicePointManager]::SecurityProtocol='Tls12'; irm https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.ps1 | iex
 
 Nombres que entiende (sirven en Fire TV y en Google TV / onn; mayúsculas, espacios, guiones y "+" dan igual):
 
@@ -238,22 +249,30 @@ La primera vez el TV pregunta **"¿Permitir la depuración USB?"** → marcar "P
    - API 25–27 (Fire OS 6, Android 7.1) → `luk-home-fos6.apk` (en Fire OS 6 no hay `sha256sum`: reinstalla siempre, sin borrar datos)
    - API 28–29 (Fire OS 7) → `luk-home-fos7.apk`
    - API 30 o más (Fire OS 8, Google TV) → `luk-home.apk`
-5. **Archivos** dentro de Luk Home (solo su carpeta privada): los temas elegidos, íconos personalizados de las apps instaladas, rotación de fondo cada 20 s, tema inicial, PIN y **dock** con solo Stremio, IPTV Smarters y TizenTube (las que estén instaladas; avisa cuáles faltan). Las demás apps quedan en "Otras apps".
+5. **Archivos** dentro de Luk Home (solo su carpeta privada): los temas elegidos, íconos personalizados de las apps instaladas, rotación de fondo cada 20 s, tema inicial, PIN y **dock** con solo Stremio, IPTV Smarters y TizenTube (las que estén instaladas; las que faltan se instalan en el paso 8 y ahí se agregan al dock). Las demás apps quedan en "Otras apps".
 6. **Botón Inicio**: activa el servicio de accesibilidad de Luk Home. Si otro launcher (p. ej. Projectivy) tenía ese servicio, **solo se reemplaza su entrada** (la app no se toca ni se desinstala); otros servicios de accesibilidad se conservan. En Google TV con un launcher de terceros como inicio, pone Luk Home como inicio.
    **Fire OS 6 (API 25–27):** Amazon no deja correr servicios de accesibilidad de apps instaladas por fuera, así que ahí no se toca la accesibilidad: se da a Luk Home el **acceso de uso** (`appops set com.ivantrj.glasslauncher GET_USAGE_STATS allow`) y Luk Home vigila qué app está al frente.
 7. **Comprueba** ajustes, temas y PIN, abre Luk Home y pulsa Inicio.
-8. **Actualizaciones de apps** (se salta con `--sin-actualizar` / `$NOUPDATE=1`): solo **Stremio, IPTV Smarters y TizenTube**,
-   y solo si **ya están instaladas** (nunca instala una que falte). Compara el `versionCode` del TV con la última versión oficial:
-   - Stremio: APK de Android TV de `www.stremio.com/downloads` (`dl.strem.io`), sin versiones rc/beta.
-   - TizenTube: última release de `github.com/reisxd/TizenTubeCobalt` (`cobalt-arm.apk` / `cobalt-arm64.apk`, con su sha256).
-   - IPTV Smarters: `www.iptvsmarters.com` (copia oficial `www.smartersott.app`).
+8. **Stremio, IPTV Smarters y TizenTube: instalar o actualizar** (solo estas tres; nunca toca otras apps del cliente):
+   - **Si ya está** en el TV: compara su `versionCode` con la última versión oficial y, solo si la oficial es **más nueva**,
+     actualiza con `adb install -r` (conserva datos y sesiones). Se salta con `--sin-actualizar` / `$NOUPDATE=1`.
+   - **Si no está**: descarga la oficial y la instala con `adb install -g`. Luego la **agrega al dock** de Luk Home (al
+     final de la fila si el TV ya tenía dock) con su ícono, y vuelve a abrir Luk Home para que se vea. Se salta con
+     `--sin-apps` (o `LUK_SINAPPS=1`) / `$SINAPPS=1`. Con las dos opciones, el paso 8 no hace nada.
 
-   Elige el APK de la misma arquitectura que la app instalada (armeabi-v7a / arm64-v8a) y comprueba que el `minSdk` del APK
-   sirva para el TV (Fire OS 6 = API 25). Solo actualiza con `adb install -r` si la oficial es **más nueva**; nunca desinstala,
-   baja de versión ni borra datos (las sesiones siguen). Si la app del TV vino de otra fuente (**firma distinta**, p. ej. la
-   de Play Store), avisa y la deja como está. Cualquier fallo (sin internet, sin espacio, no compatible) solo avisa y sigue.
-   Los APK descargados se guardan en la carpeta del instalador (`apps/`) para la próxima vez. Con `--simular` descarga y
-   compara, pero no instala. Al final muestra **LISTO** con una línea `Apps: …` (p. ej. `Stremio 1.9.12 → 1.10.4 · IPTV Smarters al día`).
+   Fuentes oficiales (las mismas para instalar y actualizar):
+   - Stremio: APK de Android TV de `www.stremio.com/downloads` (`dl.strem.io`), sin versiones rc/beta.
+   - TizenTube: releases de `github.com/reisxd/TizenTubeCobalt` (`cobalt-arm.apk` / `cobalt-arm64.apk`, con su sha256).
+   - IPTV Smarters: `www.iptvsmarters.com` (copia oficial `www.smartersott.app`), sha256 conocido.
+
+   Arquitectura: para una app instalada usa la misma que tiene (armeabi-v7a / arm64-v8a); para una nueva usa la del TV
+   (`ro.product.cpu.abi`), y si el TV rechaza la de 64 bits prueba la de 32 bits. Comprueba que el `minSdk` del APK sirva
+   para el TV (Fire OS 6 = API 25); si la última no sirve, prueba versiones oficiales anteriores y, si ninguna sirve, avisa
+   (`… no se instala`) y sigue. Nunca desinstala, baja de versión ni borra datos. Si la app del TV vino de otra fuente
+   (**firma distinta**, p. ej. la de Play Store), avisa y la deja como está. Cualquier fallo de una app (sin internet, sin
+   espacio, no compatible) solo avisa y sigue con las demás. Los APK descargados se guardan en la carpeta del instalador
+   (`apps/`) para la próxima vez. Con `--simular` descarga y compara, pero no instala ni cambia el dock. Al final muestra
+   **LISTO** con una línea `Apps: …` (p. ej. `Stremio 1.9.12 → 1.10.4 · IPTV Smarters 4.0.6 instalada · TizenTube al día`).
    El paso 8 corre cuando Luk Home ya quedó instalado y comprobado: si falla o se cancela, Luk Home queda bien igual.
 
 Si algo falla en los pasos 6–7, **devuelve los ajustes del botón Inicio (y el acceso de uso en Fire OS 6) como estaban** antes de salir.
@@ -293,7 +312,9 @@ El registro **no** contiene el PIN.
 | Fire TV 6: Inicio muestra el menú de Amazon un instante | Normal: Luk Home vuelve en menos de 1 s. Después de reiniciar el TV, el inicio de Amazon se ve ~1 minuto y luego aparece Luk Home solo. |
 | Windows: "no se reconoce irm" / errores rojos de TLS | Usar **Windows PowerShell** (no CMD) y copiar la línea completa, incluido `[Net.ServicePointManager]...`. |
 | **firma distinta… NO se desinstala** (paso 8) | La app del TV vino de otra fuente (p. ej. Play Store). Se deja como está; se actualiza desde su tienda. |
-| **no se pudo descargar / consultar la última versión** (paso 8) | Sin internet o la página cambió. Luk Home quedó bien; se puede repetir o usar `--sin-actualizar`. |
+| **no se pudo descargar / consultar la última versión** (paso 8) | Sin internet o la página cambió. Luk Home quedó bien; se puede repetir o usar `--sin-actualizar` / `--sin-apps`. |
+| **ninguna version oficial reciente funciona en este TV… no se instala** (paso 8) | El TV es muy viejo para esa app (p. ej. Stremio pide Android API 24+). Las otras apps y Luk Home quedan bien. |
+| **la instalacion fallo… se sigue con lo demas** (paso 8) | Casi siempre falta espacio. Liberar espacio y repetir la línea (las que ya quedaron no se repiten). |
 | **Tema no válido** | Revisar el nombre (minúsculas, sin espacios, separados por comas); el mensaje muestra los válidos. |
 | Mac: "xcrun"/"developer tools" | No hace falta; si macOS lo ofrece, se puede cancelar. Solo usa `curl`, `unzip` y `bash` del sistema. |
 
@@ -330,6 +351,15 @@ bundle/
 Los tres APK son compilaciones *debug* firmadas con la misma llave (necesario para `run-as`). Al actualizar un APK: reemplazarlo en `bundle/apks/`, regenerar `bundle/SHA256SUMS` (`cd bundle && shasum -a 256 apks/*.apk logo.png > SHA256SUMS`) y hacer push. GitHub puede tardar ~5 min en servir el archivo nuevo.
 
 ## Cambios
+
+- **2026-11-03a:** **El paso 8 también instala las que faltan.** Stremio, IPTV Smarters y TizenTube: si ya están se
+  actualizan (como antes, `adb install -r`, solo a una oficial más nueva); si **no están**, se descarga la oficial (mismas
+  fuentes y sha256) y se instala con `adb install -g`, con la arquitectura del TV (`ro.product.cpu.abi`; si rechaza 64 bits,
+  32 bits) y respetando el `minSdk` (prueba versiones oficiales anteriores o avisa y la salta). Las nuevas se **agregan al
+  dock** de Luk Home y Luk Home vuelve a la pantalla. Un fallo de una app nunca para la instalación. Nueva opción
+  `--sin-apps` (o `LUK_SINAPPS=1`; Windows `$SINAPPS=1;`) para no instalar las que faltan; `--sin-actualizar` /
+  `$NOUPDATE=1` ahora solo frena las actualizaciones (las que faltan se instalan igual). IPTV Smarters 5.0 agregado a los
+  sha256 conocidos. Ninguna otra app del cliente se toca. Los APK de Luk Home y los temas no cambian.
 
 - **2026-11-02e:** Tema personalizado nuevo **`real-madrid-2`** (botón Temas: "Real Madrid 2"), 10 fondos 1920×1080:
   las 8 fotos del club de `real-madrid` sin cambios y 2 fotos nuevas de otro amigo (`01-amigo2-bernabeu-familia.jpg`,

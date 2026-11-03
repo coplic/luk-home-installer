@@ -1,1 +1,1 @@
-luk-home-installer 2026-11-02e (tema personalizado real-madrid-2; opción de estilo del inicio: Oscuro o Colores, en el TV en Temas > Estilo, o con --estilo=colores / $ESTILO; dock cálido calido-b con foco verde; --bloquear-botones)
+luk-home-installer 2026-11-03a (paso 8: Stremio, IPTV Smarters y TizenTube se instalan si faltan y se agregan al dock, o se actualizan si ya estan; --sin-apps / $SINAPPS=1 para no instalarlas)

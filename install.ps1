@@ -12,21 +12,23 @@
 #   $ESTILO='colores'  tarjetas del inicio de colores (rayas y brillo, logo en una burbuja); $ESTILO='oscuro' tarjetas
 #                oscuras con logo blanco y foco verde (el normal). Sin $ESTILO el TV se queda con el que tenga (uno nuevo
 #                empieza en oscuro). En el TV se cambia en el boton de Temas (paleta), seccion "Estilo".
-#   $NOUPDATE=1  no revisar si hay version nueva de Stremio / IPTV Smarters / TizenTube
+#   $NOUPDATE=1  no revisar si hay version nueva de Stremio / IPTV Smarters / TizenTube (las que ya estan)
+#   $SINAPPS=1   no instalar Stremio / IPTV Smarters / TizenTube si faltan en el TV (normal: se instalan)
 #   $CIUDAD='Miami'  ciudad del boton del tiempo (arriba a la derecha): 'Madrid, Espana', '25.76,-80.19' o 'auto'
 #                (por internet, segun la IP). Sin $CIUDAD el TV se queda con la que tenga (al principio: auto).
 #   $APPS='netflix,youtube,disney'  apps del cliente que tambien van al inicio, despues de Stremio / IPTV Smarters /
 #                TizenTube (o el paquete exacto, ej. com.netflix.ninja; 'todas' = todas las que ya tiene). Las que no
 #                esten instaladas se saltan con un aviso. Si el TV ya tenia dock, se agregan al final. No instala nada.
 # PIN: 4 numeros, o 'sinpin' para no poner PIN.
-# Solo modo "launcher": no borra ni desinstala ninguna app del cliente. Lo unico que toca de sus apps es
-# actualizar (adb install -r, conserva datos y sesiones) Stremio / IPTV Smarters / TizenTube si ya estan
-# instaladas y hay una version oficial mas nueva con la misma firma.
+# Solo modo "launcher": no borra ni desinstala ninguna app del cliente. Lo unico que toca de apps es
+# Stremio / IPTV Smarters / TizenTube (paso 8): si ya estan, las actualiza (adb install -r, conserva datos y
+# sesiones) cuando hay una version oficial mas nueva con la misma firma; si no estan, instala la oficial
+# (adb install -g) para el procesador y el Android del TV, y las agrega al dock. Ninguna otra app se toca.
 # Pruebas: $LUK_BUNDLE_URL (zip del repo), $LUK_ADB (otro adb.exe), $LUK_HOME_DIR (carpeta de trabajo).
 # (Este archivo es solo ASCII a proposito: asi se lee igual en cualquier consola de Windows.)
 
 & {
-  param($IP, $PIN, $THEME, $DRYRUN, $NUEVODOCK, $BURL, $ADBOVR, $HOMEDIR, $NOUPDATE, $CIUDAD, $APPS, $BOTONES, $ESTILO)
+  param($IP, $PIN, $THEME, $DRYRUN, $NUEVODOCK, $BURL, $ADBOVR, $HOMEDIR, $NOUPDATE, $CIUDAD, $APPS, $BOTONES, $ESTILO, $SINAPPS)
 
   $ErrorActionPreference = 'Stop'
   $ProgressPreference = 'SilentlyContinue'
@@ -44,13 +46,15 @@
 
   # Estado compartido (hashtable: las funciones internas lo modifican por referencia)
   $st = @{ adb = ''; serial = ''; accChanged = $false; homeChanged = $false; uopChanged = $false; success = $false
-           oldSvc = ''; oldEn = ''; oldHome = ''; oldUop = ''; log = ''; stage = ''; updSum = 'no se revisaron' }
+           oldSvc = ''; oldEn = ''; oldHome = ''; oldUop = ''; log = ''; stage = ''; updSum = 'no se revisaron'
+           newInst = @(); appsTouched = $false; dockTouched = $false; apkF = '' }
 
   $IP = "$IP".Trim(); $PIN = "$PIN".Trim(); $THEME = "$THEME".Trim()
   $themeGiven = $THEME -ne ''
   $dry = [bool]$DRYRUN -and "$DRYRUN" -ne '0'
   $newDock = [bool]$NUEVODOCK -and "$NUEVODOCK" -ne '0'
   $noUpd = [bool]$NOUPDATE -and "$NOUPDATE" -ne '0'
+  $noApps = [bool]$SINAPPS -and "$SINAPPS" -ne '0'
   $btn = ''
   $b0 = "$BOTONES".Trim().ToLower()
   if (@('bloquear', 'on', 'si', '1', 'yes', 'true') -contains $b0) { $btn = 'on' }
@@ -218,12 +222,14 @@
     [IO.Compression.ZipFile]::ExtractToDirectory($zip, $dir)
   }
 
-  # ---------- actualizar apps del cliente (paso 8) ----------
-  # Solo Stremio, IPTV Smarters y TizenTube, solo si ya estan instaladas, solo a una version oficial MAS NUEVA
-  # (versionCode mayor) y con "adb install -r" (conserva datos y sesiones). Nunca instala, desinstala, baja de
-  # version ni borra datos. Si algo falla, avisa y sigue. Las descargas se guardan en <carpeta>\apps\.
-  $KNOWN_VC = @{ 'iptv-smarters-4.0.6.apk' = 106 }
-  $KNOWN_SHA = @{ 'iptv-smarters-4.0.6.apk' = '07768dd9b805d129a84698e4d3163d1fbb2340c80ba118dbaa7bbcfe4cf5e01b' }
+  # ---------- apps del cliente (paso 8) ----------
+  # Solo Stremio, IPTV Smarters y TizenTube. Si ya estan: solo a una version oficial MAS NUEVA (versionCode
+  # mayor) y con "adb install -r" (conserva datos y sesiones). Si NO estan: se instala la oficial con
+  # "adb install -g" para el procesador (ABI) y el Android (minSdk) del TV, y se agrega al dock ($SINAPPS=1 = no).
+  # Nunca desinstala, baja de version ni borra datos. Si algo falla, avisa y sigue. Descargas en <carpeta>\apps\.
+  $KNOWN_VC = @{ 'iptv-smarters-4.0.6.apk' = 106; 'iptv-smarters-5.0.apk' = 108 }
+  $KNOWN_SHA = @{ 'iptv-smarters-4.0.6.apk' = '07768dd9b805d129a84698e4d3163d1fbb2340c80ba118dbaa7bbcfe4cf5e01b'
+                  'iptv-smarters-5.0.apk' = 'b0db9468428b537719f45fcfb1e0981b41e36ea9bc3772e06daff76c335f90a9' }
   $SMARTERS_PIN = 'iptv-smarters-4.0.6.apk'   # si www.iptvsmarters.com no contesta
   $UA = @{ 'User-Agent' = 'Mozilla/5.0 (luk-home-installer)' }
 
@@ -290,20 +296,39 @@
     }
     return $false
   }
-  function RemoteInfo([string]$app, [string]$abi) {   # ultima version oficial
+  function RemoteInfo([string]$app, [string]$abi, [int]$idx = 0) {   # version oficial: 0 = la ultima; 1, 2... = anteriores
     $r = @{ url = ''; alt = ''; file = ''; vn = ''; vc = $null; sha = '' }
     if ($app -eq 'stremio') {   # www.stremio.com/downloads: solo APK de Android TV, sin rc/beta
       $page = GetPage 'https://www.stremio.com/downloads'
-      $best = [long]0
+      $seen = @{}; $list = @()
       foreach ($m in [regex]::Matches($page, 'https://dl\.strem\.io/android/v[0-9][A-Za-z0-9._-]*-androidTV/com\.stremio\.one-([0-9.]+)-([0-9]+)-' + [regex]::Escape($abi) + '\.apk')) {
         $c = [long]$m.Groups[2].Value
-        if ($c -gt $best) { $best = $c; $r.url = $m.Value; $r.file = ($m.Value -split '/')[-1]; $r.vn = $m.Groups[1].Value; $r.vc = $c }
+        if (-not $seen.ContainsKey($c)) { $seen[$c] = 1; $list += ,@($c, $m.Value, $m.Groups[1].Value) }
       }
+      $list = @($list | Sort-Object -Property @{ Expression = { $_[0] } } -Descending)
+      if ($idx -lt $list.Count) { $e = $list[$idx]; $r.vc = [long]$e[0]; $r.url = $e[1]; $r.file = ($e[1] -split '/')[-1]; $r.vn = $e[2] }
     }
     elseif ($app -eq 'tizentube') {   # GitHub reisxd/TizenTubeCobalt (ultima release; trae el sha256)
       $asset = if ($abi -eq 'arm64-v8a') { 'cobalt-arm64.apk' } elseif ($abi -eq 'armeabi-v7a') { 'cobalt-arm.apk' } else { '' }
       if (-not $asset) { return $null }
       $tag = ''
+      if ($idx -gt 0) {   # versiones anteriores: lista de releases (sin borradores ni pre-releases), con sha256
+        try {
+          $rels = Invoke-RestMethod -Uri 'https://api.github.com/repos/reisxd/TizenTubeCobalt/releases?per_page=15' -Headers @{ 'User-Agent' = 'luk-home-installer'; 'Accept' = 'application/vnd.github+json' } -TimeoutSec 60
+        } catch { LogQ "github releases: $_"; return $null }
+        $ok = @()
+        foreach ($rl in @($rels)) {
+          if ($rl.draft -or $rl.prerelease) { continue }
+          $as = @($rl.assets | Where-Object { $_.name -eq $asset }) | Select-Object -First 1
+          if ($as -and "$($as.digest)" -match '^sha256:([0-9a-f]{64})$') { $ok += ,@("$($rl.tag_name)", $Matches[1]) }
+        }
+        if ($idx -ge $ok.Count) { return $null }
+        $tag = $ok[$idx][0]; $r.sha = $ok[$idx][1]
+        if ($tag -notmatch '^[A-Za-z0-9._-]+$') { return $null }
+        $r.url = "https://github.com/reisxd/TizenTubeCobalt/releases/download/$tag/$asset"
+        $r.vn = $tag -replace '^v', ''; $r.file = "tizentube-$($r.vn)-$asset"
+        return $r
+      }
       try {
         $rel = Invoke-RestMethod -Uri 'https://api.github.com/repos/reisxd/TizenTubeCobalt/releases/latest' -Headers @{ 'User-Agent' = 'luk-home-installer'; 'Accept' = 'application/vnd.github+json' } -TimeoutSec 60
         $tag = "$($rel.tag_name)"
@@ -327,6 +352,10 @@
         if (-not $r.file -or (VerGt ($m.Value -replace '^iptv-smarters-|\.apk$', '') ($r.file -replace '^iptv-smarters-|\.apk$', ''))) { $r.file = $m.Value }
       }
       if (-not $r.file) { $r.file = $SMARTERS_PIN }
+      if ($idx -gt 0) {   # anterior conocida: la fija ($SMARTERS_PIN), si la ultima es otra
+        if ($idx -ne 1 -or $r.file -eq $SMARTERS_PIN) { return $null }
+        $r.file = $SMARTERS_PIN
+      }
       $r.url = "https://www.iptvsmarters.com/$($r.file)"; $r.alt = "https://www.smartersott.app/$($r.file)"
       $r.vn = $r.file -replace '^iptv-smarters-|\.apk$', ''
     }
@@ -351,7 +380,7 @@
     return $r
   }
   function UpdApp([string]$app, [string]$p, [string]$nm) {
-    if ($installed -notcontains $p) { LogQ "upd ${p}: no instalada"; return }
+    if ($installed -notcontains $p -and $st.newInst -notcontains $p) { LogQ "upd ${p}: no instalada"; return }
     $iv = DumpVer $p; $ivn = $iv.vn
     $iabi = $iv.abi; if (-not $iabi -or $iabi -eq 'null') { $iabi = ("$abis" -split ',')[0] }
     $abi = if ($iabi -like 'arm64*') { 'arm64-v8a' } elseif ($iabi -like 'armeabi*') { 'armeabi-v7a' } else { $iabi }
@@ -401,6 +430,7 @@
     $out = A install -r $f; LogQ "upd $p install: $out"
     if ($out -match 'Success') {
       $nv = DumpVer $p
+      $st.appsTouched = $true
       if ($nv.vc -eq $avc) { Say "   ^   $nm actualizada $ivn -> $($nv.vn)" 'Green'; UpdAdd "$nm $ivn -> $($nv.vn)" }
       else { Aviso "${nm}: el TV acepto la actualizacion pero sigue mostrando la $($nv.vn); revisa la app"; UpdAdd "$nm $($nv.vn) (revisar)" }
     }
@@ -410,16 +440,183 @@
     elseif ($out -match 'INSUFFICIENT_STORAGE') { Aviso "${nm}: el TV no tiene espacio para actualizar; se deja la $ivn"; UpdAdd "$nm sin espacio" }
     else { Aviso ("${nm}: la actualizacion fallo (" + (($out -split "`n")[-1]) + "); se deja la $ivn"); UpdAdd "$nm $ivn (fallo la actualizacion)" }
   }
+  # Baja el APK oficial ($r.url / $r.alt) a <carpeta>\apps\<app>\ y comprueba el sha256 oficial (si se conoce).
+  # Deja la ruta en $st.apkF. $false = no se pudo (ya aviso).
+  function BajarApk([string]$app, [string]$nm, $r) {
+    $dir = Join-Path $work "apps\$app"; New-Item -ItemType Directory -Force -Path $dir | Out-Null
+    $f = Join-Path $dir $r.file; $st.apkF = $f; $info = $null
+    if ((Test-Path $f) -and (-not $r.sha -or (Sha256File $f) -eq $r.sha)) { try { $info = ApkInfo $f } catch { $info = $null } }
+    if ($info) { Say "   $nm $($r.vn) ya estaba descargada en esta computadora"; return $true }
+    Remove-Item -Force -ErrorAction SilentlyContinue $f, "$f.part"
+    Say "   Descargando $nm $($r.vn) (oficial; solo esta vez, queda guardada; puede tardar unos minutos)..."
+    $ok = $false
+    foreach ($u in @($r.url, $r.alt)) {
+      if (-not $u) { continue }
+      try {
+        Download $u "$f.part"
+        $fs = [IO.File]::OpenRead("$f.part"); $b0 = $fs.ReadByte(); $b1 = $fs.ReadByte(); $fs.Close()
+        if ($b0 -eq 0x50 -and $b1 -eq 0x4B) { $ok = $true; break }
+      } catch { LogQ "inst ${app}: descarga fallo desde $u : $_" }
+      Remove-Item -Force -ErrorAction SilentlyContinue "$f.part"
+    }
+    if (-not $ok) { Aviso "${nm}: no se pudo descargar la version $($r.vn); no se instala"; return $false }
+    if ($r.sha -and (Sha256File "$f.part") -ne $r.sha) { Remove-Item -Force "$f.part"; Aviso "${nm}: el archivo descargado no coincide con el oficial (sha256); no se instala"; return $false }
+    Move-Item -Force "$f.part" $f
+    return $true
+  }
+  # La app NO esta en el TV: se instala la version oficial (adb install -g) para el procesador y el Android del TV.
+  # Si la ultima pide un Android mas nuevo, prueba versiones oficiales anteriores; si ninguna sirve, avisa y sigue.
+  function InstApp([string]$app, [string]$p, [string]$nm) {
+    if ($noApps) { LogQ "inst ${p}: no instalada, SINAPPS"; Bien "$nm no esta en el TV (no se instala: `$SINAPPS=1)"; UpdAdd "$nm no instalada"; return }
+    if ($app -eq 'smarters') { $abiList = @('universal') }   # un solo APK para todos los procesadores
+    elseif ($cpuAbi -like 'arm64*') { $abiList = @('arm64-v8a', 'armeabi-v7a') }   # si no hay de 64 bits, la de 32 bits tambien corre
+    elseif ($cpuAbi -like 'armeabi*' -or -not $cpuAbi) { $abiList = @('armeabi-v7a') }
+    else { $abiList = @($cpuAbi) }
+    LogQ "inst ${p}: no instalada; abi=$cpuAbi -> $($abiList -join ' ') api=$sdk"
+    $tried = @(); $got = $false
+    foreach ($abi in $abiList) {
+      $next = $false
+      for ($idx = 0; $idx -le 3; $idx++) {
+        $r = RemoteInfo $app $abi $idx
+        if (-not $r) { break }
+        $got = $true
+        LogQ "inst ${p}: oficial[$idx] abi=$abi file=$($r.file) vn=$($r.vn) vc=$($r.vc) sha=$($r.sha) url=$($r.url)"
+        if (-not (BajarApk $app $nm $r)) { UpdAdd "$nm no se pudo instalar"; return }
+        $f = $st.apkF; $info = $null
+        try { $info = ApkInfo $f } catch { $info = $null }
+        LogQ "inst ${p}: archivo $f -> $(if ($info) { "$($info.pkg) $($info.vc) $($info.vn) $($info.min)" })"
+        $avc = [long]0
+        if (-not $info -or $info.pkg -ne $p -or -not [long]::TryParse("$($info.vc)", [ref]$avc)) {
+          Remove-Item -Force -ErrorAction SilentlyContinue $f
+          Aviso "${nm}: el archivo descargado no es valido; no se instala"; UpdAdd "$nm no se pudo instalar"; return
+        }
+        $avn = $info.vn; $amin = 1; [void][int]::TryParse("$($info.min)", [ref]$amin)
+        if ($amin -gt $sdk) { Aviso "$nm $avn necesita Android API $amin y este TV es API $sdk; busco una version oficial anterior que sirva..."; $tried += $avn; continue }
+        $need = [long]((Get-Item $f).Length / 1024) * 2 + 50000; $fk = FreeKb
+        if ($fk -gt 0 -and $fk -lt $need) { Aviso "${nm}: no hay espacio en el TV para instalarla ($([int]($fk/1024)) MB libres, hacen falta ~$([int]($need/1024)) MB); no se instala"; UpdAdd "$nm sin espacio"; return }
+        if ($dry) { Sim "adb install -g $($r.file)   ($nm $avn, $abi, Android API $amin+; no estaba en el TV)"; $st.newInst += $p; UpdAdd "$nm $avn instalada (simulado)"; return }
+        Say "   Instalando $nm $avn (no estaba en el TV; puede tardar 1-2 minutos)..."
+        if ($platform -like 'Google*') { Say '   (Si en el TV sale un aviso de Play Protect, elige "Instalar de todas formas".)' }
+        $out = A install -g $f; LogQ "inst $p install: $out"
+        if ($out -match 'Success') {
+          if ((S pm path $p) -match 'package:') { $st.newInst += $p; Say "   +   $nm $avn instalada" 'Green'; UpdAdd "$nm $avn instalada" }
+          else { Aviso "${nm}: el TV dijo que la instalo pero no aparece; revisa la app"; UpdAdd "$nm (revisar)" }
+        }
+        elseif ($out -match 'NO_MATCHING_ABIS|CPU_ABI_INCOMPATIBLE') {
+          if ($abi -eq 'arm64-v8a') { Aviso "$nm $avn de 64 bits no sirve en este TV; pruebo la de 32 bits..."; $next = $true; break }
+          Aviso "$nm $avn no es para el procesador de este TV; no se instala"; UpdAdd "$nm no compatible con este TV"
+        }
+        elseif ($out -match 'OLDER_SDK') { Aviso "$nm $avn no es compatible con este TV (API $sdk); busco una version oficial anterior que sirva..."; $tried += $avn; continue }
+        elseif ($out -match 'INSUFFICIENT_STORAGE') { Aviso "${nm}: el TV no tiene espacio para instalarla; no se instala"; UpdAdd "$nm sin espacio" }
+        elseif ($out -match 'ALREADY_EXISTS|UPDATE_INCOMPATIBLE|SIGNATURE|DUPLICATE') { Aviso "${nm}: el TV ya tiene una copia escondida o de otra fuente; no se toca"; UpdAdd "$nm no se toco" }
+        else { Aviso ("${nm}: la instalacion fallo (" + (@($out -split "`n" | Where-Object { $_ -notmatch '^Performing' })[-1]) + "); se sigue con lo demas"); UpdAdd "$nm no se pudo instalar" }
+        return
+      }
+      if ($next) { continue }
+    }
+    if ($tried.Count) { Aviso "${nm}: ninguna version oficial reciente funciona en este TV (Android API $sdk; probadas: $($tried -join ' ')); no se instala"; UpdAdd "$nm no compatible con este TV" }
+    elseif (-not $got) { Aviso "${nm}: no pude consultar la version oficial para este TV (internet, la pagina cambio o no hay para $cpuAbi); no se instala"; UpdAdd "$nm no se pudo instalar" }
+    else { Aviso "${nm}: no se encontro una version oficial para este TV; no se instala"; UpdAdd "$nm no se pudo instalar" }
+  }
+  function TileName([string]$p) {
+    $nf = Join-Path $bundle "tiles\$p.txt"
+    if (Test-Path $nf) { return ([IO.File]::ReadAllText($nf) -split "`n")[0].Trim() }
+    $p
+  }
+  # Apps recien instaladas en el paso 8: se agregan al dock de Luk Home (con su icono).
+  # Dock nuevo de esta corrida: orden Stremio, IPTV Smarters, TizenTube y luego las apps extra.
+  # Dock que ya tenia el TV: se deja tal cual y se agregan al final las que falten.
+  function DockNuevas {
+    if (-not $st.newInst.Count) { return }
+    $root = Join-Path ([IO.Path]::GetTempPath()) ("lukapps-" + [guid]::NewGuid().ToString('N'))
+    $d = Join-Path $root 'lukhome'; New-Item -ItemType Directory -Force -Path (Join-Path $d 'tiles') | Out-Null
+    $cur = ''
+    if ($dockMode -ne 'nuevo') {
+      if ($dry) {
+        $fb = Join-Path $bk 'dock-antes.txt'; if (Test-Path $fb) { $cur = [IO.File]::ReadAllText($fb) }
+        if ($dockMode -eq 'extra') { $cur = $cur.TrimEnd("`r", "`n") + "`n" + (($extraPkgs | ForEach-Object { "$_`n" }) -join '') }
+      } else { $cur = S run-as $PKG cat files/dock.txt }
+      if ($cur -match 'No such file|run-as:') { $cur = '' }
+    }
+    $cur = $cur -replace "`r", ''
+    $curPk = @($cur -split "`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ -and -not $_.StartsWith('#') })
+    $added = @()
+    if ($dockMode -eq 'nuevo' -or $curPk.Count -eq 0) {
+      $dk = @()
+      foreach ($p in $DOCK_APPS) { if ($installed -contains $p -or $st.newInst -contains $p) { $dk += $p } }
+      foreach ($p in $extraPkgs) { if ($DOCK_APPS -notcontains $p -and $dk -notcontains $p) { $dk += $p } }
+      foreach ($p in $st.newInst) { $added += (TileName $p) }
+      $txt = "# Apps del inicio, en orden`n" + (($dk | ForEach-Object { "$_`n" }) -join '')
+    } else {
+      $dk = @($curPk); $txt = $cur.TrimEnd("`n") + "`n"
+      foreach ($p in $DOCK_APPS) {
+        if ($st.newInst -notcontains $p -or $dk -contains $p) { continue }
+        $dk += $p; $txt += "$p`n"; $added += (TileName $p)
+      }
+    }
+    WriteLF (Join-Path $d 'dock.txt') $txt
+    $nt = 0
+    foreach ($p in $st.newInst) {
+      $tp = Join-Path $bundle "tiles\$p.png"
+      if (Test-Path $tp) {
+        Copy-Item $tp -Destination (Join-Path $d 'tiles')
+        $tt = Join-Path $bundle "tiles\$p.txt"; if (Test-Path $tt) { Copy-Item $tt -Destination (Join-Path $d 'tiles') }
+        $nt++
+      }
+    }
+    Copy-Item -Path (Join-Path $bundle 'tv-apply.sh') -Destination $d
+    LogQ "dock_nuevas: mode=$(if ($dockMode) { $dockMode } else { 'existente' }) new=$($st.newInst -join ' ') dock=$($dk -join ' ')"
+    try {
+      if (-not $added.Count) { Bien 'Dock: las apps nuevas ya estaban en el inicio'; return }
+      if ($dry) {
+        Sim "adb push lukhome\ -> /data/local/tmp/ y tv-apply.sh  (escribe: tiles/ ($nt iconos), dock.txt)"
+        Sim ("dock.txt = " + ($dk -join ' '))
+        return
+      }
+      A shell rm -rf /data/local/tmp/lukhome | Out-Null
+      $out = A push $d /data/local/tmp/; LogQ "push apps: $out"
+      $out = A shell sh /data/local/tmp/lukhome/tv-apply.sh; LogQ "apply apps: $out"
+      if ($out -match 'LUK_APPLY_OK') { $st.dockTouched = $true; Bien ("Dock: se agregan al inicio: " + ($added -join ', ')) }
+      else {
+        A shell rm -rf /data/local/tmp/lukhome | Out-Null
+        Aviso ("No pude agregar las apps nuevas al dock (" + ((($out -split "`n") | Where-Object { $_ -match 'LUK_APPLY_FAIL' } | Select-Object -First 1)) + '); estan en "Otras apps". Vuelve a correr la linea para ponerlas.')
+      }
+    } finally { Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $root }
+  }
+  # Despues de instalar o actualizar apps: Luk Home de nuevo en pantalla (y recarga el dock). Sin teclas.
+  function VolverLuk {
+    if (-not $st.newInst.Count -and -not $st.appsTouched) { return }
+    if ($dry) { Sim 'abrir Luk Home otra vez (am start --ez reload true) para que muestre el dock al dia'; return }
+    LogQ (A shell am start -n "$PKG/.HomeActivity" --ez reload true)
+    $top = ''
+    for ($i = 0; $i -lt 6; $i++) {
+      Start-Sleep -Milliseconds 1500
+      $top = ((S dumpsys activity activities) -split "`n" | Where-Object { $_ -match 'mResumedActivity|topResumedActivity' } | Select-Object -First 1)
+      if ("$top" -match [regex]::Escape($PKG)) { break }
+    }
+    LogQ "volver_luk: $top"
+    if ("$top" -match [regex]::Escape($PKG)) { Bien ("Luk Home de nuevo en pantalla" + $(if ($st.dockTouched) { ', con el dock al dia' } else { '' })) }
+    else { Aviso 'Pulsa el boton Inicio (la casita) del control para volver a Luk Home.' }
+  }
+  function AppPaso([string]$app, [string]$p, [string]$nm) {   # actualiza si esta, instala si falta
+    if ($installed -contains $p) {
+      if ($noUpd) { LogQ "upd ${p}: instalada, NOUPDATE"; UpdAdd "$nm sin revisar"; return }
+      UpdApp $app $p $nm
+    } else { InstApp $app $p $nm }
+  }
   function ActualizarApps {
-    Paso 8 'Revisando actualizaciones de apps'
-    if ($noUpd) { Bien 'Omitido ($NOUPDATE=1)'; $st.updSum = 'no se revisaron ($NOUPDATE=1)'; return }
-    $any = @($DOCK_APPS | Where-Object { $installed -contains $_ }).Count
-    if (-not $any) { Bien 'Ni Stremio, ni IPTV Smarters, ni TizenTube estan instaladas: nada que revisar'; $st.updSum = 'ninguna instalada'; return }
+    Paso 8 'Apps: Stremio, IPTV Smarters y TizenTube (instalar o actualizar)'
+    $st.newInst = @(); $st.appsTouched = $false; $st.dockTouched = $false
+    if ($noUpd -and $noApps) { Bien 'Omitido ($NOUPDATE=1 y $SINAPPS=1)'; $st.updSum = 'no se revisaron ($NOUPDATE=1 $SINAPPS=1)'; return }
+    if ($noUpd) { Bien 'Las que ya estan no se actualizan ($NOUPDATE=1)' }
+    if ($noApps) { Bien 'Las que faltan no se instalan ($SINAPPS=1)' }
     $st.updSum = ''
     foreach ($x in @(@('stremio', 'com.stremio.one', 'Stremio'), @('smarters', 'com.nst.iptvsmarterstvbox', 'IPTV Smarters'), @('tizentube', 'io.gh.reisxd.tizentube.cobalt', 'TizenTube'))) {
-      try { UpdApp $x[0] $x[1] $x[2] }
+      try { AppPaso $x[0] $x[1] $x[2] }
       catch { LogQ ($_ | Out-String); Aviso "$($x[2]): no se pudo revisar ($($_.Exception.Message)); se deja como esta"; UpdAdd "$($x[2]) sin revisar" }
     }
+    try { DockNuevas } catch { LogQ ($_ | Out-String); Aviso "No pude agregar las apps nuevas al dock ($($_.Exception.Message)); estan en 'Otras apps'" }
+    try { VolverLuk } catch { LogQ ($_ | Out-String); Aviso 'Pulsa el boton Inicio (la casita) del control para volver a Luk Home.' }
   }
 
   function RestoreAcc {
@@ -456,7 +653,7 @@
       $pinHash = ($sha.ComputeHash([Text.Encoding]::ASCII.GetBytes($PIN)) | ForEach-Object { $_.ToString('x2') }) -join ''
     }
     $st.serial = if ($IP -match ':') { $IP } else { "$($IP):5555" }
-    LogQ "ip=$IP theme=$THEME city=$city apps=$appsArg dry=$dry new_dock=$newDock noupdate=$noUpd buttons=$btn estilo=$estilo pin_set=$([bool]$PIN) ps=$($PSVersionTable.PSVersion) os=$([Environment]::OSVersion.VersionString)"
+    LogQ "ip=$IP theme=$THEME city=$city apps=$appsArg dry=$dry new_dock=$newDock noupdate=$noUpd noapps=$noApps buttons=$btn estilo=$estilo pin_set=$([bool]$PIN) ps=$($PSVersionTable.PSVersion) os=$([Environment]::OSVersion.VersionString)"
 
     # ---------- 1. herramientas ----------
     Paso 1 'Preparando las herramientas (solo la primera vez tarda un poco)'
@@ -614,6 +811,9 @@
     }
     $lukPresent = $installed -contains $PKG; $lukSha = ''; $hasDock = $false; $hasTheme = $false; $tvThemes = @(); $thPrev = @()
     $abis = S getprop ro.product.cpu.abilist; if (-not $abis) { $abis = S getprop ro.product.cpu.abi }
+    # ABI principal (la que usa el sistema): Fire TV de 64 bits con Android de 32 bits dicen armeabi-v7a
+    $cpuAbi = S getprop ro.product.cpu.abi; if (-not $cpuAbi) { $cpuAbi = ("$abis" -split ',')[0] }
+    LogQ "abi=$cpuAbi abilist=$abis"
     if ($lukPresent) {
       $lp = ((S pm path $PKG) -split "`n")[0] -replace '^package:', ''
       $lukSha = ((S sha256sum $lp) -split '\s+')[0]   # Fire OS 6 no tiene sha256sum: vacio = se reinstala (conserva los datos)
@@ -698,7 +898,7 @@
       $p = $t.BaseName
       if ($installed -contains $p) { Copy-Item $t.FullName, (Join-Path $bundle "tiles\$p.txt") -Destination (Join-Path $st.stage 'tiles'); $ntile++ }
     }
-    $wroteDock = $false
+    $wroteDock = $false; $dockMode = ''
     if ($hasDock -and -not $newDock -and $extraPkgs.Count -eq 0) {
       Bien 'El dock ya existia: se deja como esta (para reescribirlo: $NUEVODOCK=1)'
       if ($appsArg) { Aviso 'Ninguna de las apps extra se pudo poner en el inicio (ver avisos de arriba)' }
@@ -710,7 +910,7 @@
       $added = @(); $already = @()
       foreach ($p in $extraPkgs) { if ($dock -contains $p) { $already += (AppLabel $p) } else { $dock += $p; $added += (AppLabel $p); $prevTxt += "`n$p" } }
       if ($added.Count) {
-        WriteLF (Join-Path $st.stage 'dock.txt') ($prevTxt + "`n"); $wroteDock = $true
+        WriteLF (Join-Path $st.stage 'dock.txt') ($prevTxt + "`n"); $wroteDock = $true; $dockMode = 'extra'
         Bien ("Dock: se deja el que tenia el TV y se agregan al final: " + ($added -join ', '))
       } else { Bien 'Dock: se deja como esta' }
       if ($already.Count) { Bien ("Ya estaban en el inicio: " + ($already -join ', ')) }
@@ -725,10 +925,13 @@
       $added = @()
       foreach ($p in $extraPkgs) { if ($DOCK_APPS -notcontains $p -and $dock -notcontains $p) { $dock += $p; $added += (AppLabel $p) } }
       WriteLF (Join-Path $st.stage 'dock.txt') ("# Apps del inicio, en orden`n" + (($dock | ForEach-Object { "$_`n" }) -join ''))
-      $wroteDock = $true
+      $wroteDock = $true; $dockMode = 'nuevo'
       Bien "Dock: $($dock.Count) app(s) en el inicio; las demas quedan en 'Otras apps'"
       if ($added.Count) { Bien ("Apps extra en el inicio: " + ($added -join ', ')) }
-      if ($missing.Count) { Aviso ("No estan instaladas (no van al dock): " + ($missing -join ', ')) }
+      if ($missing.Count) {
+        if ($noApps) { Aviso ("No estan instaladas (no van al dock; `$SINAPPS=1): " + ($missing -join ', ')) }
+        else { Bien ("Todavia no estan en el TV: " + ($missing -join ', ') + " (se instalan en el paso 8 y se agregan al dock)") }
+      }
     }
     if ($wroteDock -and $dock.Count -gt 20) { Aviso "El inicio muestra maximo 20 apps; las que pasen de 20 quedan en 'Otras apps'" }
     $wroteTheme = $false; $curTheme = ''
@@ -888,4 +1091,4 @@
   finally {
     if (-not $st.success) { try { RestoreAcc } catch { } }
   }
-} $IP $PIN $THEME $DRYRUN $NUEVODOCK $LUK_BUNDLE_URL $LUK_ADB $LUK_HOME_DIR $NOUPDATE $CIUDAD $APPS $BOTONES $ESTILO
+} $IP $PIN $THEME $DRYRUN $NUEVODOCK $LUK_BUNDLE_URL $LUK_ADB $LUK_HOME_DIR $NOUPDATE $CIUDAD $APPS $BOTONES $ESTILO $SINAPPS
