@@ -1,1 +1,1 @@
-luk-home-installer 2026-11-03a (paso 8: Stremio, IPTV Smarters y TizenTube se instalan si faltan y se agregan al dock, o se actualizan si ya estan; --sin-apps / $SINAPPS=1 para no instalarlas)
+luk-home-installer 2026-11-03b (paso 8: IPTV Smarters siempre la gratis de Troypoint; enlace leído del Troypoint Toolbox, 3.1.5.1 fija con sha256; actualiza solo desde Troypoint con la misma firma (install -r); si hay otra se cambia, borrando login y listas)

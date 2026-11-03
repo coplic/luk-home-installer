@@ -12,6 +12,7 @@ Ten a mano el control del TV y una computadora conectada **al mismo WiFi que el 
    - **Windows:** pulsa el botón Inicio, escribe **PowerShell** y ábrelo (no hace falta "como administrador").
 
 3. **Pega la línea que te mandamos** y pulsa Enter. Verás los pasos 1 a 8. El paso 8 instala Stremio, IPTV Smarters y TizenTube si no las tienes (y las pone en el inicio de Luk Home), y si ya las tienes revisa si hay versión nueva y las actualiza sin borrar tus datos ni sesiones (la primera vez puede tardar unos minutos en descargar).
+   **IPTV Smarters** se instala siempre en su versión **gratis de Troypoint**. Si tu TV ya tenía otra IPTV Smarters (por ejemplo la de pago), se cambia por la gratis y **se borran su usuario y sus listas**: al terminar, abre IPTV Smarters y vuelve a poner tu usuario y tu lista.
 
 4. **Mira el TV:** cuando aparezca **"¿Permitir la depuración USB?"**, marca *"Permitir siempre desde esta computadora"* y pulsa **Permitir / Aceptar**.
    (En Google TV puede salir un aviso de Play Protect: elige **"Instalar de todas formas"**.)

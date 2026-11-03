@@ -24,7 +24,8 @@
 # Opciones (después de la IP y el PIN):
 #   --dry-run        hace todo (descargas, conexión, lecturas, respaldo) pero NO escribe nada en el TV ni pulsa teclas
 #   --nuevo-dock     reescribe el dock (Stremio, IPTV Smarters, TizenTube) aunque Luk Home ya tenga uno
-#   --sin-actualizar no revisa si hay versión nueva de Stremio / IPTV Smarters / TizenTube (también LUK_NOUPDATE=1)
+#   --sin-actualizar no revisa si hay versión nueva de Stremio / TizenTube y deja la IPTV Smarters que tenga el TV
+#                    aunque no sea la gratis de Troypoint (también LUK_NOUPDATE=1)
 #   --sin-apps       no instala Stremio / IPTV Smarters / TizenTube si faltan en el TV (también LUK_SINAPPS=1)
 #   --bloquear-botones    los botones de apps del control (Netflix, Prime, YouTube...) no hacen nada (LUK_BOTONES=bloquear)
 #                         Google TV / onn: el botón no hace nada. Fire TV: si la app no está instalada, la página
@@ -35,10 +36,14 @@
 #                         Sin --estilo el TV se queda con el que tenga (uno nuevo empieza en oscuro). En el TV se cambia
 #                         en el botón de Temas (paleta), sección "Estilo".
 #
-# Solo modo "launcher": no borra ni desinstala ninguna app del cliente. Lo único que toca de apps es
-# Stremio / IPTV Smarters / TizenTube (paso 8): si ya están, las actualiza (adb install -r, conserva datos y
-# sesiones) cuando hay una versión oficial más nueva con la misma firma; si no están, instala la oficial
-# (adb install -g) para el procesador y el Android del TV, y las agrega al dock. Ninguna otra app se toca.
+# Solo modo "launcher": no borra ni desinstala ninguna app del cliente (salvo cambiar una IPTV Smarters que no sea
+# la gratis de Troypoint, ver abajo). Lo único que toca de apps es
+# Stremio / TizenTube (paso 8): si ya están, las actualiza (adb install -r, conserva datos y sesiones) cuando
+# hay una versión oficial más nueva con la misma firma; si no están, instala la oficial (adb install -g) para el
+# procesador y el Android del TV, y las agrega al dock. IPTV Smarters: siempre la GRATIS 3.1.5.1 de Troypoint
+# (MediaFire, sha256 fijo). Si falta, se instala; si el TV tiene otra (ej. la 4.0.6 de pago), se cambia por esa
+# (se desinstala primero: se borran el login y las listas de Smarters); si ya es esa, no se toca. Nunca se
+# actualiza a versiones de pago. Ninguna otra app se toca.
 # Variables para pruebas: LUK_BUNDLE_URL (zip del repo), LUK_ADB (usar otro adb), LUK_HOME_DIR (carpeta de trabajo).
 
 main() {
@@ -73,7 +78,7 @@ main() {
       --estilo=*) ESTILO_ARG="${a#--estilo=}" ;;
       --oscuro) ESTILO_ARG=oscuro ;;
       --colores) ESTILO_ARG=colores ;;
-      -h|--help) sed -n '2,33p' "$0" 2>/dev/null || true; return 0 ;;
+      -h|--help) sed -n '2,47p' "$0" 2>/dev/null || true; return 0 ;;
       -|--) NPOS=$((NPOS + 1))
          case "$NPOS" in 2) PIN="-" ;; 4) CITY_SKIP=1 ;; 3) THEME="todos" ;; esac ;;   # "-" = no cambiar / por defecto
       -*) printf 'Opción desconocida: %s\n' "$a"; return 2 ;;
@@ -286,7 +291,8 @@ main() {
   }
 
   # ---------- actualizar apps del cliente (paso 8) ----------
-  # Solo Stremio, IPTV Smarters y TizenTube, solo si ya están instaladas, solo a una versión oficial MÁS NUEVA
+  # Stremio y TizenTube (IPTV Smarters va aparte: smarters_paso, siempre la gratis de Troypoint).
+  # Solo si ya están instaladas, solo a una versión oficial MÁS NUEVA
   # (versionCode mayor) y con "adb install -r" (conserva datos y sesiones). Nunca instala, desinstala, baja de
   # versión ni borra datos. Si algo falla, avisa y sigue. Las descargas se guardan en ~/.luk-home/apps/.
   local AXML_PL UPD_SUM="no se revisaron"
@@ -320,12 +326,34 @@ PLEOF
     else python3 -c 'import sys,zipfile;sys.stdout.buffer.write(zipfile.ZipFile(sys.argv[1]).read("AndroidManifest.xml"))' "$1" 2>/dev/null; fi \
       | perl -e "$AXML_PL" 2>>"$LOG"
   }
+  # sha256 del certificado que firma un APK (firma v1, META-INF/*.RSA|DSA|EC). Vacío/1 = no se pudo leer.
+  apkcert() {
+    local n c="$WORK/cert-$$.der"
+    command -v openssl >/dev/null 2>&1 || return 1
+    rm -f "$c"
+    if command -v unzip >/dev/null 2>&1; then
+      n=$(unzip -Z1 "$1" 2>/dev/null | grep -iE '^META-INF/[^/]+\.(RSA|DSA|EC)$' | head -1); [ -n "$n" ] || return 1
+      unzip -p "$1" "$n" 2>/dev/null
+    else
+      python3 -c 'import sys,re,zipfile;z=zipfile.ZipFile(sys.argv[1]);n=[x for x in z.namelist() if re.match(r"META-INF/[^/]+\.(RSA|DSA|EC)$",x,re.I)];sys.stdout.buffer.write(z.read(n[0]) if n else b"")' "$1" 2>/dev/null
+    fi | openssl pkcs7 -inform DER -print_certs 2>/dev/null | openssl x509 -outform DER > "$c" 2>/dev/null
+    [ -s "$c" ] || { rm -f "$c"; return 1; }
+    sha "$c"; rm -f "$c"
+  }
   isnum() { case "$1" in ''|*[!0-9]*) return 1 ;; esac; return 0; }
   vgt() { awk -v a="$1" -v b="$2" 'BEGIN{n=split(a,x,/[^0-9]+/);m=split(b,y,/[^0-9]+/);k=n>m?n:m;for(i=1;i<=k;i++){if(x[i]+0>y[i]+0)exit 0;if(x[i]+0<y[i]+0)exit 1}exit 1}'; }
   # Versiones oficiales conocidas cuyo versionCode no viene en el nombre (evita bajar 78 MB solo para leerlo).
-  local KNOWN_VC="iptv-smarters-4.0.6.apk=106 iptv-smarters-5.0.apk=108"
-  local KNOWN_SHA="iptv-smarters-4.0.6.apk=07768dd9b805d129a84698e4d3163d1fbb2340c80ba118dbaa7bbcfe4cf5e01b iptv-smarters-5.0.apk=b0db9468428b537719f45fcfb1e0981b41e36ea9bc3772e06daff76c335f90a9"
-  local SMARTERS_PIN="iptv-smarters-4.0.6.apk"   # si www.iptvsmarters.com no contesta
+  local KNOWN_VC="" KNOWN_SHA=""
+  # IPTV Smarters: SIEMPRE la versión gratis 3.1.5.1 de Troypoint (Troypoint Toolbox → MediaFire), fija con su sha256.
+  # Nunca se instala ni se actualiza a las de pago de iptvsmarters.com / smartersott.app (4.x, 5.x).
+  local SMARTERS_FILE="iptv-smarters-pro-3.1.5.1-troypoint.apk" SMARTERS_VN="3.1.5.1" SMARTERS_VC=112
+  local SMARTERS_SHA="2791f5346f95269c9254c547ee641a80eb5d86f0a9045dc4ae41e79210a5dbdc"
+  local SMARTERS_URL="https://www.mediafire.com/file_premium/xrlnqh9kppx349u/IPTV_Smarters_Pro_%255B3.1.5.1%255D.apk/file"
+  local SMARTERS_ALT="https://www.mediafire.com/file/xrlnqh9kppx349u/IPTV_Smarters_Pro_%255B3.1.5.1%255D.apk/file"
+  # Firma (certificado, sha256) de las Smarters de Troypoint: una versión más nueva del Toolbox solo se acepta con esta firma.
+  local SMARTERS_CERT="6100ac4577ec668ff4e5d7a18cbb070a68fba7f1b301900628665ce521cd09f1"
+  local TOOLBOX_URL="${LUK_TOOLBOX_URL:-https://troypoint.com/troypoint-toolbox/}"
+  local ST_DONE=0 ST_URL="" ST_ALT="" ST_FILE="" ST_VN="" ST_VC="" ST_SHA=""
   local R_URL R_ALT R_FILE R_VN R_VC R_SHA
   # Versión oficial: $1=app $2=abi (arm64-v8a | armeabi-v7a) [$3=0 la última, 1, 2... versiones oficiales
   # anteriores, para un TV donde la última no es compatible]. 1 = no hay (o no se pudo consultar).
@@ -376,18 +404,10 @@ EOS
         case "$tag" in ''|*[!A-Za-z0-9._-]*) return 1 ;; esac
         R_URL="https://github.com/reisxd/TizenTubeCobalt/releases/download/$tag/$asset"
         R_VN=${tag#v}; R_FILE="tizentube-$R_VN-$asset" ;;
-      smarters)   # www.iptvsmarters.com ("Download Latest Version"); copia oficial en www.smartersott.app
-        page=$(curl -fsSL -A 'Mozilla/5.0' --connect-timeout 15 -m 60 https://www.iptvsmarters.com/ 2>>"$LOG")
-        for f in $(printf '%s' "$page" | grep -oE 'iptv-smarters-[0-9][0-9.]*[0-9]\.apk' | sort -u); do
-          if [ -z "$R_FILE" ] || vgt "${f#iptv-smarters-}" "${R_FILE#iptv-smarters-}"; then R_FILE=$f; fi
-        done
-        [ -n "$R_FILE" ] || R_FILE=$SMARTERS_PIN
-        if [ "$idx" -gt 0 ]; then   # anterior conocida: la fija ($SMARTERS_PIN), si la última es otra
-          [ "$idx" = 1 ] && [ "$R_FILE" != "$SMARTERS_PIN" ] || return 1
-          R_FILE=$SMARTERS_PIN
-        fi
-        R_URL="https://www.iptvsmarters.com/$R_FILE"; R_ALT="https://www.smartersott.app/$R_FILE"
-        R_VN=${R_FILE#iptv-smarters-}; R_VN=${R_VN%.apk} ;;
+      smarters)   # solo Troypoint: la del Toolbox (si es más nueva y con la misma firma) o la 3.1.5.1 fija
+        [ "$idx" -gt 0 ] && return 1
+        smarters_target
+        R_FILE=$ST_FILE; R_URL=$ST_URL; R_ALT=$ST_ALT; R_VN=$ST_VN; R_VC=$ST_VC; R_SHA=$ST_SHA ;;
     esac
     [ -n "$R_URL" ] || return 1
     for kv in $KNOWN_VC; do [ "${kv%%=*}" = "$R_FILE" ] && R_VC=${kv#*=}; done
@@ -471,6 +491,29 @@ EOS
     esac
     return 0
   }
+  # Descarga $1 a $2 (1 = no es un APK). MediaFire: la página redirige al archivo (el enlace directo trae una
+  # clave que cambia cada vez) o trae el enlace en el HTML (href="https://downloadNNNN.mediafire.com/..." o
+  # data-scrambled-url en base64); se saca de ahí cada vez. Otras páginas: igual que antes.
+  bajar_url() {
+    local u=$1 o=$2 ua="" pg d enc
+    case "$u" in *mediafire.com*) ua="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36" ;; esac
+    rm -f "$o"
+    if [ -t 2 ]; then curl -fL --retry 2 --connect-timeout 20 ${ua:+-A "$ua"} --progress-bar -o "$o" "$u"; else curl -fL --retry 2 --connect-timeout 20 ${ua:+-A "$ua"} -sS -o "$o" "$u" >>"$LOG" 2>&1; fi
+    [ -s "$o" ] && [ "$(head -c 2 "$o")" = PK ] && return 0
+    [ -n "$ua" ] && [ -s "$o" ] || { rm -f "$o"; return 1; }
+    pg=$(head -c 3000000 "$o" | LC_ALL=C tr -d '\000'); rm -f "$o"
+    d=$(printf '%s' "$pg" | LC_ALL=C grep -oE 'https?://download[0-9]*\.mediafire\.com/[^"'"'"'<> ]+' | head -1)
+    if [ -z "$d" ]; then
+      enc=$(printf '%s' "$pg" | LC_ALL=C grep -oE 'data-scrambled-url="[A-Za-z0-9+/=]+"' | head -1 | sed 's/^[^"]*"//; s/"$//')
+      [ -n "$enc" ] && d=$(printf '%s' "$enc" | base64 -d 2>/dev/null || printf '%s' "$enc" | base64 -D 2>/dev/null)
+      case "$d" in https://download*.mediafire.com/*) ;; *) d="" ;; esac
+    fi
+    logq "mediafire $u -> enlace directo: ${d:-(no se encontró)}"
+    [ -n "$d" ] || return 1
+    if [ -t 2 ]; then curl -fL --retry 2 --connect-timeout 20 -A "$ua" --progress-bar -o "$o" "$d"; else curl -fL --retry 2 --connect-timeout 20 -A "$ua" -sS -o "$o" "$d" >>"$LOG" 2>&1; fi
+    [ -s "$o" ] && [ "$(head -c 2 "$o")" = PK ] && return 0
+    rm -f "$o"; return 1
+  }
   # Baja el APK oficial de R_URL / R_ALT a $WORK/apps/<app>/ y comprueba el sha256 oficial (si se conoce).
   # $1=app $2=nombre. Deja la ruta en APK_F. 1 = no se pudo (ya avisó).
   local APK_F=""
@@ -481,10 +524,10 @@ EOS
       say "   $2 $R_VN ya estaba descargada en esta computadora"; return 0
     fi
     rm -f "$APK_F" "$APK_F.part"
-    say "   Descargando $2 $R_VN (oficial; solo esta vez, queda guardada)..."
+    if [ "$1" = smarters ]; then say "   Descargando $2 $R_VN gratis (Troypoint; solo esta vez, queda guardada)..."
+    else say "   Descargando $2 $R_VN (oficial; solo esta vez, queda guardada)..."; fi
     for u in $R_URL $R_ALT; do
-      if [ -t 2 ]; then curl -fL --retry 2 --connect-timeout 20 --progress-bar -o "$APK_F.part" "$u"; else curl -fL --retry 2 --connect-timeout 20 -sS -o "$APK_F.part" "$u" >>"$LOG" 2>&1; fi
-      [ -s "$APK_F.part" ] && [ "$(head -c 2 "$APK_F.part")" = PK ] && break
+      bajar_url "$u" "$APK_F.part" && break
       rm -f "$APK_F.part"; logq "inst $1: descarga falló desde $u"
     done
     if [ ! -s "$APK_F.part" ]; then aviso "$2: no se pudo descargar la versión $R_VN; no se instala"; return 1; fi
@@ -634,7 +677,115 @@ $(printf '%s\n' $EXTRA_PKGS)"
       *) aviso "Pulsa el botón Inicio (la casita) del control para volver a Luk Home." ;;
     esac
   }
+  # IPTV Smarters: SOLO de Troypoint. Lee el enlace de IPTV Smarters del Troypoint Toolbox (MediaFire) cada vez.
+  # Si es el de la 3.1.5.1 (o no se pudo leer la página) => la 3.1.5.1 fija (sha256 conocido). Si Troypoint enlaza
+  # otro archivo, se baja y solo se usa si es com.nst.iptvsmarterstvbox, MÁS NUEVA (versionCode mayor) y firmada
+  # con el mismo certificado que la 3.1.5.1; si no, se usa la 3.1.5.1. Deja el resultado en ST_* (una vez por corrida).
+  smarters_target() {
+    [ "$ST_DONE" = 1 ] && return 0
+    ST_DONE=1 ST_FILE=$SMARTERS_FILE ST_URL=$SMARTERS_URL ST_ALT=$SMARTERS_ALT ST_VN=$SMARTERS_VN ST_VC=$SMARTERS_VC ST_SHA=$SMARTERS_SHA
+    local page u key f info tpkg tvc tvn cert
+    page=$(curl -fsSL --connect-timeout 15 -m 60 -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0" "$TOOLBOX_URL" 2>>"$LOG") || page=""
+    u=$(printf '%s' "$page" | LC_ALL=C grep -oE 'https?://[A-Za-z0-9.]*mediafire\.com/[^"'"'"'<> ]*[Ss][Mm][Aa][Rr][Tt][Ee][Rr][Ss][^"'"'"'<> ]*' | head -1)
+    logq "smarters: Troypoint Toolbox -> ${u:-(no se pudo leer; se usa la 3.1.5.1 fija)}"
+    [ -n "$u" ] || return 0
+    case "$u" in */xrlnqh9kppx349u/*) logq "smarters: Troypoint sigue con la 3.1.5.1"; return 0 ;; esac
+    key=$(printf '%s' "$u" | sed -n 's#.*mediafire\.com/file[a-z_]*/\([A-Za-z0-9]*\)/.*#\1#p'); :
+    [ -n "$key" ] || key=nuevo
+    f="$WORK/apps/smarters/iptv-smarters-troypoint-$key.apk"; mkdir -p "$WORK/apps/smarters"
+    if [ ! -s "$f" ] || [ "$(head -c 2 "$f")" != PK ]; then
+      say "   Troypoint tiene otro archivo de IPTV Smarters; se revisa (versión y firma)..."
+      bajar_url "$u" "$f.part" && mv -f "$f.part" "$f" || { rm -f "$f.part"; aviso "IPTV Smarters: no se pudo bajar el archivo nuevo de Troypoint; se usa la $SMARTERS_VN"; return 0; }
+    fi
+    info=$(apkinfo "$f") || info=""; set -- $info; tpkg=${1:-}; tvc=${2:-}; tvn=${3:-}
+    cert=$(apkcert "$f") || cert=""
+    logq "smarters: Troypoint nuevo $f -> $info cert=$cert"
+    if [ "$tpkg" != com.nst.iptvsmarterstvbox ] || ! isnum "$tvc"; then aviso "IPTV Smarters: el archivo de Troypoint no es IPTV Smarters; se usa la $SMARTERS_VN"; rm -f "$f"; return 0; fi
+    if [ "$cert" != "$SMARTERS_CERT" ]; then aviso "IPTV Smarters $tvn de Troypoint no tiene la misma firma que la $SMARTERS_VN; se usa la $SMARTERS_VN"; rm -f "$f"; return 0; fi
+    if [ "$tvc" -le "$SMARTERS_VC" ]; then logq "smarters: Troypoint $tvn (vc $tvc) no es más nueva que la $SMARTERS_VN; se usa la fija"; rm -f "$f"; return 0; fi
+    ST_FILE=${f##*/} ST_URL=$u ST_ALT="" ST_VN=$tvn ST_VC=$tvc ST_SHA=$(sha "$f")
+    bien "Troypoint tiene IPTV Smarters $tvn (misma firma que la $SMARTERS_VN): se usa esa"
+  }
+  # IPTV Smarters (2026-11-03b): siempre la gratis de Troypoint (ver smarters_target). Si falta, se instala.
+  # Si el TV tiene una de Troypoint (misma firma) más vieja, se actualiza con "adb install -r" (conserva login y
+  # listas); igual o más nueva, no se toca. Si tiene otra (por ejemplo la 4.0.6 de pago, que no funciona), se cambia:
+  # se guarda una copia, se desinstala (se borran su login y sus listas) y se instala la de Troypoint; si eso
+  # falla, se vuelve a poner la copia. Nunca se instala ni se actualiza a las de pago (iptvsmarters.com, smartersott.app).
+  smarters_paso() {   # $1=smarters $2=paquete $3=nombre
+    local app=$1 p=$2 nm=$3 dump ivc ivn info apkg avc avn amin out need paths bkd q n=0 back icert
+    dump=$(S dumpsys package "$p")
+    ivc=$(printf '%s\n' "$dump" | sed -n 's/.*versionCode=\([0-9]*\).*/\1/p' | head -1)
+    ivn=$(printf '%s\n' "$dump" | sed -n 's/.*versionName=\([^ ]*\).*/\1/p' | head -1)
+    if [ "$NOUPD" = 1 ]; then logq "smarters: vc=$ivc vn=$ivn, --sin-actualizar, no se toca"; bien "$nm ${ivn:-} se deja como está (--sin-actualizar)"; upd_add "$nm sin revisar"; return 0; fi
+    remote_info smarters universal 0
+    logq "smarters: instalada vc=$ivc vn=$ivn; Troypoint = vc $R_VC vn $R_VN ($R_FILE)"
+    if [ "$ivc" = "$R_VC" ] && [ "$ivn" = "$R_VN" ]; then
+      bien "$nm $ivn (la gratis de Troypoint) ya está; no se toca"; upd_add "$nm $ivn al día"; return 0
+    fi
+    bajar_apk smarters "$nm" || { upd_add "$nm ${ivn:-} (no se pudo bajar la de Troypoint, no se tocó)"; return 0; }
+    info=$(apkinfo "$APK_F") || info=""
+    set -- $info; apkg=${1:-}; avc=${2:-}; avn=${3:-}; amin=${4:-1}
+    logq "smarters: archivo $APK_F -> $info"
+    if [ "$apkg" != "$p" ] || [ "$avc" != "$R_VC" ]; then aviso "$nm: el archivo descargado no es el esperado ($info); no se toca"; rm -f "$APK_F"; upd_add "$nm ${ivn:-} (no se tocó)"; return 0; fi
+    # Copia de la que tiene el TV (lectura; también en simulación): sirve para ver su firma y para volver atrás.
+    paths=$(S pm path "$p" | sed -n 's/^package://p')
+    bkd="$WORK/apps/smarters/respaldo-${ivn:-x}-$TS"; mkdir -p "$bkd"
+    for q in $paths; do
+      n=$((n + 1)); A pull "$q" "$bkd/$n-$(basename "$q")" >>"$LOG" 2>&1 || { n=-1; break; }
+    done
+    if [ "$n" -lt 1 ]; then aviso "$nm: no pude leer la que tiene el TV; por seguridad no se toca"; rm -rf "$bkd"; upd_add "$nm ${ivn:-} (no se tocó)"; return 0; fi
+    icert=$(apkcert "$(ls "$bkd"/1-* | head -1)") || icert=""
+    logq "smarters: firma de la instalada = ${icert:-?}"
+    if [ -z "$icert" ]; then aviso "$nm: no pude leer la firma de la que tiene el TV; por seguridad no se toca"; rm -rf "$bkd"; upd_add "$nm ${ivn:-} (no se tocó)"; return 0; fi
+    if isnum "$amin" && [ "$amin" -gt "$SDK" ]; then aviso "$nm $avn necesita Android API $amin y este TV es API $SDK; se deja la ${ivn:-actual}"; rm -rf "$bkd"; upd_add "$nm ${ivn:-} (no se tocó)"; return 0; fi
+    case ",$ABIS," in *,armeabi-v7a,*|*,armeabi,*|,,) ;; *) aviso "$nm $avn no es para el procesador de este TV ($ABIS); se deja la ${ivn:-actual}"; rm -rf "$bkd"; upd_add "$nm ${ivn:-} (no se tocó)"; return 0 ;; esac
+    need=$(( $(wc -c < "$APK_F") / 1024 * 2 + 50000 ))
+    FREE=$(S df -k /data | awk 'NR>1 {v=$4} END {print v+0}')
+    if [ "${FREE:-0}" -gt 0 ] && [ "$FREE" -lt "$need" ]; then aviso "$nm: no hay espacio en el TV ($((FREE / 1024)) MB libres); se deja la ${ivn:-actual}"; rm -rf "$bkd"; upd_add "$nm sin espacio"; return 0; fi
+    if [ "$icert" = "$SMARTERS_CERT" ]; then   # ya es de Troypoint (misma firma)
+      rm -rf "$bkd"
+      if ! isnum "$ivc" || [ "$ivc" -ge "$avc" ]; then bien "$nm $ivn (de Troypoint) ya está; no se toca"; upd_add "$nm $ivn al día"; return 0; fi
+      if [ "$DRY" = 1 ]; then sim "adb install -r $R_FILE   ($nm ${ivn:-?} → $avn de Troypoint; conserva login y listas)"; upd_add "$nm ${ivn:-?} → $avn (simulado)"; return 0; fi
+      say "   Actualizando $nm ${ivn:-?} → $avn de Troypoint (conserva login y listas)..."
+      out=$(A install -r "$APK_F" 2>&1 | tr -d '\r'); logq "smarters install -r: $out"
+      if printf '%s' "$out" | grep -q Success; then APPS_TOUCHED=1; say "   ${G}↑${N} $nm actualizada a $avn"; upd_add "$nm ${ivn:-?} → $avn"
+      else aviso "$nm: no se pudo actualizar ($(printf '%s' "$out" | grep -v '^Performing' | tail -1)); sigue la ${ivn:-actual}"; upd_add "$nm ${ivn:-} (no se pudo actualizar)"; fi
+      return 0
+    fi
+    aviso "$nm ${ivn:-?} no es la gratis de Troypoint: se cambia por la $avn de Troypoint."
+    if [ "$DRY" = 1 ]; then
+      rm -rf "$bkd"
+      sim "adb uninstall $p   (se BORRAN el login y las listas de $nm)"
+      sim "adb install -g $R_FILE   ($nm $avn gratis de Troypoint)"
+      NEW_INST="$NEW_INST $p"; upd_add "$nm ${ivn:-?} → $avn gratis (simulado; se borran login y listas)"; return 0
+    fi
+    say "   ${Y}Ojo:${N} al cambiar $nm se borran su login y sus listas; hay que volver a ponerlos en la app."
+    say "   Quitando $nm ${ivn:-} (copia guardada en esta computadora)..."
+    out=$(A uninstall "$p" 2>&1 | tr -d '\r'); logq "smarters uninstall: $out"
+    case "$out" in *Success*) ;; *) aviso "$nm: el TV no dejó desinstalarla ($(printf '%s' "$out" | tail -1)); sigue la ${ivn:-actual}"; rm -rf "$bkd"; upd_add "$nm ${ivn:-} (no se tocó)"; return 0 ;; esac
+    INSTALLED=$(printf '%s' "$INSTALLED" | sed "s/ $p / /")
+    APPS_TOUCHED=1
+    say "   Instalando $nm $avn gratis (Troypoint; puede tardar 1-2 minutos)..."
+    case "$PLATFORM" in Google*) say "   (Si en el TV sale un aviso de Play Protect, elige \"Instalar de todas formas\".)" ;; esac
+    out=$(A install -g "$APK_F" 2>&1 | tr -d '\r'); logq "smarters install: $out"
+    if printf '%s' "$out" | grep -q Success && S pm path "$p" | grep -q package:; then
+      INSTALLED="$INSTALLED$p "; NEW_INST="$NEW_INST $p"
+      say "   ${G}✚${N} $nm cambiada: ${ivn:-?} → $avn gratis (abre la app y pon otra vez el usuario y la lista)"
+      upd_add "$nm ${ivn:-?} → $avn gratis (login y listas borrados)"
+      rm -rf "$bkd"; return 0
+    fi
+    aviso "$nm $avn no se pudo instalar ($(printf '%s' "$out" | grep -v '^Performing' | tail -1)); vuelvo a poner la ${ivn:-anterior}..."
+    if [ "$n" = 1 ]; then back=$(A install -g "$bkd"/1-* 2>&1 | tr -d '\r'); else back=$(A install-multiple -g "$bkd"/* 2>&1 | tr -d '\r'); fi
+    logq "smarters restore: $back"
+    if printf '%s' "$back" | grep -q Success; then
+      INSTALLED="$INSTALLED$p "; aviso "$nm ${ivn:-} quedó puesta otra vez (sin login: hay que volver a ponerlo)"; upd_add "$nm ${ivn:-} (la gratis falló, se volvió a poner)"; rm -rf "$bkd"
+    else
+      aviso "$nm no se pudo volver a poner. La copia quedó en $bkd"; upd_add "$nm FALTA (copia en $bkd)"
+    fi
+    return 0
+  }
   app_paso() {   # $1=app $2=paquete $3=nombre: actualiza si está, instala si falta
+    if [ "$1" = smarters ] && inlist "$2" "$INSTALLED"; then smarters_paso "$@"; return 0; fi
     if inlist "$2" "$INSTALLED"; then
       if [ "$NOUPD" = 1 ]; then logq "upd $2: instalada, --sin-actualizar"; upd_add "$3 sin revisar"; return 0; fi
       upd_app "$@"
@@ -643,7 +794,7 @@ $(printf '%s\n' $EXTRA_PKGS)"
     fi
   }
   actualizar_apps() {
-    paso 8 "Apps: Stremio, IPTV Smarters y TizenTube (instalar o actualizar)"
+    paso 8 "Apps: Stremio, IPTV Smarters (gratis, Troypoint) y TizenTube (instalar o actualizar)"
     NEW_INST="" APPS_TOUCHED=0 DOCK_TOUCHED=0
     if [ "$NOUPD" = 1 ] && [ "$NOAPPS" = 1 ]; then bien "Omitido (--sin-actualizar y --sin-apps)"; UPD_SUM="no se revisaron (--sin-actualizar --sin-apps)"; return 0; fi
     [ "$NOUPD" = 1 ] && bien "Las que ya están no se actualizan (--sin-actualizar)"

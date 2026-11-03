@@ -5,6 +5,9 @@ Modo **solo launcher**: no borra apps, no desinstala nada (tampoco Projectivy u 
 Lo único que toca de las apps del cliente son **Stremio, IPTV Smarters y TizenTube**: si ya están y hay una versión oficial
 **más nueva**, las actualiza con `adb install -r` (conserva datos y sesiones); si **no están**, descarga la oficial, la instala
 con `adb install -g` y la pone en el dock de Luk Home. Ninguna otra app se instala, se quita ni se actualiza. Ver paso 8.
+**IPTV Smarters es siempre la gratis de Troypoint** (Troypoint Toolbox → MediaFire, la 3.1.5.1): nunca la de pago de
+`iptvsmarters.com` / `smartersott.app`. Única excepción a "no desinstala nada": si el TV tiene otra IPTV Smarters (por
+ejemplo la 4.0.6 de pago), se cambia por la de Troypoint y **se borran su login y sus listas** (hay que volver a ponerlos).
 Para no instalar las que faltan: `--sin-apps` (Windows `$SINAPPS=1;`); para no actualizar las que ya están: `--sin-actualizar`
 (Windows `$NOUPDATE=1;`).
 
@@ -21,7 +24,9 @@ La línea tiene 7 partes separadas por **espacios**: IP, PIN, TEMAS, CIUDAD, APP
 - **ESTILO** de las tarjetas del inicio: `--estilo=oscuro` = tarjetas oscuras con el logo blanco que se pone verde al pasar por encima (el normal). Cambia `oscuro` por `colores` para tarjetas de colores (con rayas, brillo y el logo en una bolita). En Windows es `$ESTILO='oscuro';` o `$ESTILO='colores';`. Si borras esa parte, el TV se queda con el estilo que ya tenga (un TV nuevo empieza en oscuro). El cliente también lo puede cambiar después con el control: botón de **Temas** (la paleta, arriba) > **Estilo** > **Oscuro** o **Colores**.
 
 Además, sin escribir nada: el paso 8 **instala Stremio, IPTV Smarters y TizenTube si faltan** (y las agrega al dock) y
-**actualiza** las que ya están. Para no instalar las que faltan, agrega al final `--sin-apps` (Windows: `$SINAPPS=1;` antes de `[Net...`);
+**actualiza** las que ya están. IPTV Smarters siempre es la **gratis de Troypoint**: si el TV tiene otra (p. ej. la 4.0.6 de
+pago) se cambia sola por la de Troypoint, y su login y sus listas se borran (hay que volver a ponerlos en la app); no hay
+que agregar ninguna opción. Para no instalar las que faltan, agrega al final `--sin-apps` (Windows: `$SINAPPS=1;` antes de `[Net...`);
 para no actualizar las que ya están, `--sin-actualizar` (Windows: `$NOUPDATE=1;`).
 
 **Mac** (app Terminal):
@@ -256,6 +261,7 @@ La primera vez el TV pregunta **"¿Permitir la depuración USB?"** → marcar "P
 8. **Stremio, IPTV Smarters y TizenTube: instalar o actualizar** (solo estas tres; nunca toca otras apps del cliente):
    - **Si ya está** en el TV: compara su `versionCode` con la última versión oficial y, solo si la oficial es **más nueva**,
      actualiza con `adb install -r` (conserva datos y sesiones). Se salta con `--sin-actualizar` / `$NOUPDATE=1`.
+     (IPTV Smarters tiene reglas propias, ver abajo.)
    - **Si no está**: descarga la oficial y la instala con `adb install -g`. Luego la **agrega al dock** de Luk Home (al
      final de la fila si el TV ya tenía dock) con su ícono, y vuelve a abrir Luk Home para que se vea. Se salta con
      `--sin-apps` (o `LUK_SINAPPS=1`) / `$SINAPPS=1`. Con las dos opciones, el paso 8 no hace nada.
@@ -263,16 +269,32 @@ La primera vez el TV pregunta **"¿Permitir la depuración USB?"** → marcar "P
    Fuentes oficiales (las mismas para instalar y actualizar):
    - Stremio: APK de Android TV de `www.stremio.com/downloads` (`dl.strem.io`), sin versiones rc/beta.
    - TizenTube: releases de `github.com/reisxd/TizenTubeCobalt` (`cobalt-arm.apk` / `cobalt-arm64.apk`, con su sha256).
-   - IPTV Smarters: `www.iptvsmarters.com` (copia oficial `www.smartersott.app`), sha256 conocido.
+   - IPTV Smarters: **solo Troypoint** (la gratis; la de pago de `iptvsmarters.com` / `smartersott.app` no funciona y nunca
+     se usa). En cada corrida lee el enlace de "IPTV Smarters Pro" de `https://troypoint.com/troypoint-toolbox/` (MediaFire).
+     - Si enlaza la 3.1.5.1 (o la página no se puede leer) usa la **3.1.5.1 fija**:
+       `https://www.mediafire.com/file_premium/xrlnqh9kppx349u/IPTV_Smarters_Pro_%255B3.1.5.1%255D.apk/file`
+       (`com.nst.iptvsmarterstvbox`, versionCode 112, minSdk 17, armeabi-v7a, sha256
+       `2791f5346f95269c9254c547ee641a80eb5d86f0a9045dc4ae41e79210a5dbdc`). MediaFire da un enlace de descarga distinto
+       cada vez: el script lo sigue solo y comprueba el sha256.
+     - Si Troypoint enlaza **otro archivo**, lo baja y solo lo usa si es IPTV Smarters, **más nueva** que la 3.1.5.1 y con
+       **la misma firma** (certificado sha256 `6100ac45…ce521cd09f1`); si no, usa la 3.1.5.1.
+     - **No está** en el TV → instala la de Troypoint (`adb install -g`) y la agrega al dock.
+     - **Ya es de Troypoint** (misma firma; se comprueba con una copia de la del TV): si la de Troypoint es más nueva,
+       `adb install -r` (conserva login y listas); si es igual o más nueva, no se toca.
+     - **Es otra** (firma distinta, p. ej. la 4.0.6 de pago): avisa, guarda una copia en la computadora
+       (`apps/smarters/respaldo-<versión>-<fecha>/`), la desinstala (**se borran su login y sus listas**) e instala la de
+       Troypoint. Si esa instalación falla, vuelve a poner la copia. Si no puede leer la del TV, no hay espacio o el TV no
+       es ARM, no la toca.
+     - `--sin-actualizar` / `$NOUPDATE=1` la deja como esté. Con `--simular` solo muestra lo que haría.
 
    Arquitectura: para una app instalada usa la misma que tiene (armeabi-v7a / arm64-v8a); para una nueva usa la del TV
    (`ro.product.cpu.abi`), y si el TV rechaza la de 64 bits prueba la de 32 bits. Comprueba que el `minSdk` del APK sirva
    para el TV (Fire OS 6 = API 25); si la última no sirve, prueba versiones oficiales anteriores y, si ninguna sirve, avisa
-   (`… no se instala`) y sigue. Nunca desinstala, baja de versión ni borra datos. Si la app del TV vino de otra fuente
+   (`… no se instala`) y sigue. Nunca desinstala, baja de versión ni borra datos (salvo el cambio de IPTV Smarters explicado arriba). Si la app del TV vino de otra fuente
    (**firma distinta**, p. ej. la de Play Store), avisa y la deja como está. Cualquier fallo de una app (sin internet, sin
    espacio, no compatible) solo avisa y sigue con las demás. Los APK descargados se guardan en la carpeta del instalador
    (`apps/`) para la próxima vez. Con `--simular` descarga y compara, pero no instala ni cambia el dock. Al final muestra
-   **LISTO** con una línea `Apps: …` (p. ej. `Stremio 1.9.12 → 1.10.4 · IPTV Smarters 4.0.6 instalada · TizenTube al día`).
+   **LISTO** con una línea `Apps: …` (p. ej. `Stremio 1.9.12 → 1.10.4 · IPTV Smarters 4.0.6 → 3.1.5.1 gratis (login y listas borrados) · TizenTube al día`).
    El paso 8 corre cuando Luk Home ya quedó instalado y comprobado: si falla o se cancela, Luk Home queda bien igual.
 
 Si algo falla en los pasos 6–7, **devuelve los ajustes del botón Inicio (y el acceso de uso en Fire OS 6) como estaban** antes de salir.
@@ -352,6 +374,12 @@ Los tres APK son compilaciones *debug* firmadas con la misma llave (necesario pa
 
 ## Cambios
 
+- **2026-11-03b:** **IPTV Smarters ahora es la gratis de Troypoint.** La de `iptvsmarters.com` / `smartersott.app` (4.0.6,
+  de pago) no funcionaba: esas fuentes se quitaron. El paso 8 lee en cada corrida el enlace de IPTV Smarters del Troypoint
+  Toolbox (MediaFire) y usa la 3.1.5.1 fija (sha256 `2791f534…a5dbdc`), o una más nueva de Troypoint solo si tiene la misma
+  firma. Si falta, se instala; si ya es de Troypoint y hay una más nueva, `adb install -r` (conserva login y listas); si es
+  otra (p. ej. la 4.0.6 de pago), se cambia: copia en la computadora, desinstalar, instalar la de Troypoint (se borran su
+  login y sus listas; si falla, vuelve la copia). Sin opciones nuevas. Stremio y TizenTube sin cambios (fuentes oficiales).
 - **2026-11-03a:** **El paso 8 también instala las que faltan.** Stremio, IPTV Smarters y TizenTube: si ya están se
   actualizan (como antes, `adb install -r`, solo a una oficial más nueva); si **no están**, se descarga la oficial (mismas
   fuentes y sha256) y se instala con `adb install -g`, con la arquitectura del TV (`ro.product.cpu.abi`; si rechaza 64 bits,
