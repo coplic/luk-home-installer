@@ -1,1 +1,1 @@
-luk-home-installer 2026-11-03b (paso 8: IPTV Smarters siempre la gratis de Troypoint; enlace leído del Troypoint Toolbox, 3.1.5.1 fija con sha256; actualiza solo desde Troypoint con la misma firma (install -r); si hay otra se cambia, borrando login y listas)
+luk-home-installer 2026-11-07a (temas personalizados barcelona y real-madrid-3, fuera de order.txt y de las líneas genéricas, solo si la línea los nombra; paso 8 igual: IPTV Smarters gratis de Troypoint, Stremio y TizenTube oficiales; --sin-apps / $SINAPPS=1, --sin-actualizar / $NOUPDATE=1)

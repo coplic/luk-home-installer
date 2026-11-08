@@ -75,7 +75,7 @@ $IP='192.168.1.50'; $PIN='1234'; $THEME='real-madrid,real-madrid-2,navidad,terro
 - **IP**: la del TV del cliente (ver abajo).
 - **PIN**: 4 números, protege Ajustes de Luk Home. En Windows **siempre entre comillas** (`'0123'`) para no perder ceros. Para no poner PIN: `sinpin`.
 - **Tema** (opcional): `paisajes`, `mar`, `espacio`, `autos`, `animales`, `barcos`, `american-sports`, `terror` (antes `halloween-terror`, que sigue valiendo),
-  o un tema personalizado (ver abajo; ya vienen `real-madrid`, `real-madrid-2` y `navidad`). En Mac va como 3.er valor; en Windows `$THEME='mar';` (o quítalo, y van todos los incluidos).
+  o un tema personalizado (ver abajo; ya vienen `real-madrid`, `real-madrid-2`, `navidad`, `barcelona` y `real-madrid-3`). En Mac va como 3.er valor; en Windows `$THEME='mar';` (o quítalo, y van todos los incluidos).
   - **Un solo nombre** (`mar`): van al TV **todos** los temas y `mar` queda como tema inicial.
   - **Una lista con comas, sin espacios** (`autos,mar,espacio`): van al TV **solo esos**; el **primero** es el inicial.
     `todos` dentro de la lista agrega todos los incluidos (p. ej. `terror,todos`).
@@ -105,9 +105,14 @@ Temas personalizados que ya vienen en el paquete (fuera de `order.txt`, solo par
 | `real-madrid` | Real Madrid | estadio de noche, afición con bufandas blancas, copa, balón blanco y oro, "HALA MADRID", Cibeles y Gran Vía de noche |
 | `real-madrid-2` | Real Madrid 2 | las mismas 8 fotos del club que `real-madrid` (escudo, estadio, jugadores, "¡HALA MADRID!") y 2 fotos nuevas de otro amigo: con su niño en hombros en el Bernabéu, y levantando la Champions |
 | `navidad` | Navidad | chimenea, árbol decorado, pueblo nevado, trineo de Santa, adornos, regalos, cabaña nevada |
+| `barcelona` | Barcelona | Camp Nou, túnel, balón, bufanda, vestuario, portería, botas, blaugrana, y 2 fotos de una amiga en el estadio y en la tribuna |
+| `real-madrid-3` | Real Madrid Amiga | las 8 fotos del club de `real-madrid` y 2 fotos de una amiga: en el Bernabéu y con la Champions |
 
-Ejemplos: Mac `… 1234 real-madrid` (Real Madrid inicial + todos los incluidos), `… 1234 real-madrid,navidad` (solo esos dos);
-Windows `$THEME='real-madrid';` o `$THEME='navidad,todos';`.
+`barcelona` y `real-madrid-3` **no** están en las líneas de arriba ni en `order.txt`. Solo llegan si la línea de ese cliente los nombra.
+
+Ejemplos: Mac `… 1234 real-madrid` (Real Madrid inicial + todos los incluidos), `… 1234 real-madrid,navidad` (solo esos dos),
+`… 1234 barcelona` (Barcelona inicial + todos los incluidos) o `… 1234 barcelona,real-madrid-3` (solo esos dos);
+Windows `$THEME='real-madrid';`, `$THEME='navidad,todos';`, `$THEME='barcelona';` o `$THEME='real-madrid-3';`.
 
 Extras opcionales:
 
@@ -374,6 +379,11 @@ Los tres APK son compilaciones *debug* firmadas con la misma llave (necesario pa
 
 ## Cambios
 
+- **2026-11-07a:** Temas personalizados nuevos **`barcelona`** (botón Temas: "Barcelona") y **`real-madrid-3`**
+  (botón Temas: "Real Madrid Amiga"). Cada uno tiene 10 fondos 1920×1080. No están en `order.txt` ni en las líneas
+  genéricas de copiar y pegar: un cliente genérico no los recibe. Se piden por nombre (`barcelona`, `real-madrid-3`,
+  o `barcelona,real-madrid-3`). Los APK, `SHA256SUMS`, el paso 8 (Troypoint, Stremio, TizenTube) y las opciones
+  (`--sin-apps`, `--sin-actualizar`, `--bloquear-botones`, `--estilo`) no cambian.
 - **2026-11-03b:** **IPTV Smarters ahora es la gratis de Troypoint.** La de `iptvsmarters.com` / `smartersott.app` (4.0.6,
   de pago) no funcionaba: esas fuentes se quitaron. El paso 8 lee en cada corrida el enlace de IPTV Smarters del Troypoint
   Toolbox (MediaFire) y usa la 3.1.5.1 fija (sha256 `2791f534…a5dbdc`), o una más nueva de Troypoint solo si tiene la misma
