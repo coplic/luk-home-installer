@@ -1,0 +1,7 @@
+fbneo
+mame2003_plus
+fceumm
+mupen64plus_next_gles3
+flycast
+genesis_plus_gx
+pcsx_rearmed

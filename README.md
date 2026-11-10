@@ -126,6 +126,64 @@ Extras opcionales:
 | Apps extra en el inicio (ver abajo) | 5.º valor, o `--apps netflix,youtube`, o `APPS=netflix,youtube` antes de `bash` | `$APPS='netflix,youtube';` |
 | Botones de apps del control sin efecto (ver abajo) | `--bloquear-botones` (volver: `--desbloquear-botones`) | `$BOTONES='bloquear';` (volver: `$BOTONES='normal';`) |
 | Estilo de las tarjetas del inicio (ver abajo) | `--estilo=oscuro` o `--estilo=colores` (o `ESTILO=colores` antes de `bash`) | `$ESTILO='oscuro';` o `$ESTILO='colores';` |
+| **RetroArch** con los emuladores del cuarto (ver abajo) | `--retroarch` (o `RETROARCH=1` antes de `bash`) | `$RETROARCH=1;` |
+| **Kodi** con el build de la sala (ver abajo) | `--kodi` (o `KODI=1` antes de `bash`) | `$KODI=1;` |
+| Con `--kodi`: cambiar un Kodi incompatible (64 bits u otra versión) | `--reemplazar-kodi` | `$KODIREEMPLAZAR=1;` |
+
+### RetroArch y Kodi (opcionales, 2026-11-10a)
+
+Sin `--retroarch` / `--kodi` (Windows `$RETROARCH` / `$KODI`) el instalador **no toca RetroArch ni Kodi** y hace
+exactamente lo mismo que antes (pasos 1–8). Con ellos agrega el paso 9 y/o 10, **después** de que Luk Home quedó instalado
+y comprobado (si fallan, Luk Home queda bien igual). Se pueden usar juntos o por separado y con cualquier otra opción.
+
+**Mac** (Luk Home + RetroArch + Kodi):
+```bash
+curl -fsSL https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.sh | bash -s -- 192.168.0.x 1234 real-madrid,real-madrid-2,navidad,terror,american-sports,autos,animales,mar,barcos,espacio,paisajes auto netflix,youtube,disney --bloquear-botones --estilo=oscuro --retroarch --kodi
+```
+
+**Windows** (Luk Home + RetroArch + Kodi):
+```powershell
+$IP='192.168.0.x'; $PIN='1234'; $THEME='real-madrid,real-madrid-2,navidad,terror,american-sports,autos,animales,mar,barcos,espacio,paisajes'; $CIUDAD='auto'; $APPS='netflix,youtube,disney'; $BOTONES='bloquear'; $ESTILO='oscuro'; $RETROARCH=1; $KODI=1; [Net.ServicePointManager]::SecurityProtocol='Tls12'; irm https://raw.githubusercontent.com/coplic/luk-home-installer/main/install.ps1 | iex
+```
+
+Solo uno de los dos: quita `--kodi` / `$KODI=1;` o `--retroarch` / `$RETROARCH=1;`.
+
+**RetroArch (`--retroarch`, paso 9)** — deja el TV como el **cuarto** (onn 192.168.0.249):
+- Si falta, instala el **RetroArch 1.22.2 oficial** de `buildbot.libretro.com/stable/1.22.2/android/`
+  (`RetroArch_ra32.apk`, sha256 `9e964f53…803f`, el mismo de la sala y el cuarto; en un TV solo de 64 bits,
+  `RetroArch_aarch64.apk` sha256 `7bd5d208…d213`). Si ya está, lo actualiza **en su lugar** (`adb install -r`, sin
+  desinstalar, conserva todo); si el TV tiene uno **más nuevo**, no lo toca (nunca baja de versión).
+- **7 núcleos oficiales** para el procesador del TV (armeabi-v7a o arm64-v8a), bajados en el momento de
+  `buildbot.libretro.com/nightly/android/latest/`: FinalBurn Neo, MAME 2003-Plus, FCEUmm, Mupen64Plus-Next GLES3,
+  Flycast, Genesis Plus GX y PCSX ReARMed. Los instala el propio RetroArch con su `CoreSideloadActivity` oficial
+  (RetroArch se abre y se cierra solo unas veces). Más las fichas oficiales de núcleos (`info.zip`).
+- `retroarch.cfg` del cuarto (menú Ozone, mandos, 8BitDo Pro 2 reservado para el jugador 1, etc.). Se quedan los valores
+  propios del TV (ruta del APK, carpeta de núcleos, versión de recursos, audio); las fichas van a `Android/data/<app>/files/info`.
+- Opciones de núcleo `FCEUmm.opt` y `MAME 2003-Plus.opt`, 438 perfiles de mandos (`autoconfig`, incl. 8BitDo) y
+  `hiscore.dat` de MAME 2003-Plus (solo si falta).
+- Carpetas de juegos **vacías** en `/sdcard/ROMs/`: `Nintendo - NES`, `Arcade - Mame 2003 Plus`, `Nintendo - N64`,
+  `SNK - NEO GEO`, `fbneo_1_0_0_3_best/games` y `fbneo_1_0_0_3_best/samples`.
+- **No lleva ROMs, BIOS ni partidas** (saves/states). Nunca borra ni pisa ROMs, partidas, estados ni BIOS del TV: solo
+  agrega. Antes de pisar `retroarch.cfg` y las `.opt` los **respalda en la computadora** (`respaldos/retroarch-IP-fecha/`).
+- **Play Protect (Google TV / onn):** puede frenar la instalación ("Bloqueada por Play Protect" / "App no segura"). En
+  la pantalla del TV elige **Más detalles > Instalar de todas formas**; el instalador avisa y reintenta (3 veces). No hace
+  falta (ni se debe) apagar Play Protect.
+- Si RetroArch está abierto en el TV (alguien jugando), no se toca. Si un núcleo no se pudo bajar, se puede bajar luego en
+  RetroArch: Menú principal > Actualizador en línea > Descargar núcleos.
+
+**Kodi (`--kodi`, paso 10)** — el **Kodi de la sala** (192.168.0.122), con todos sus repos, addons, skin, menú, fondo,
+favoritos y ajustes, igual que `bundle/kodi/kodi-sala.sh` (Mac) / la función `KodiPaso` (Windows):
+- Kodi **21.3 oficial** de `mirrors.kodi.tv` (armeabi-v7a, sha256 `12d75e89…20cc8`), instalado si falta o si es más
+  viejo. Necesita un TV que acepte apps de 32 bits ARM. Si el TV tiene un Kodi incompatible (64 bits u otra versión),
+  avisa y no lo toca; con `--reemplazar-kodi` (Windows `$KODIREEMPLAZAR=1;`) lo respalda, lo desinstala y pone el 21.3.
+- El build (`kodi-sala.zip`, ~290 MB) se baja del **Release `kodi-build-2026-11-09`** de este repo y se comprueba su
+  sha256 (`9759a041…4187`). Se guarda en la computadora para la próxima vez.
+- **Respalda** el Kodi que ya tenga el TV en la computadora (`kodi/respaldos/`), luego **borra solo los datos de Kodi**
+  (`pm clear org.xbmc.kodi`), le da permisos de almacenamiento (Android 11+: también "acceso a todos los archivos"), lo
+  abre una vez para que cree su carpeta y copia el build (tar por `/data/local/tmp`). Ninguna otra app se toca.
+- **Sin cuentas ni contraseñas**: después hay que volver a iniciar **TorBox en POV, Umbrella y ResolveURL**.
+- Si Kodi está abierto en el TV, no se toca.
+
 
 ### Estilo de las tarjetas del inicio (Oscuro o Colores)
 
@@ -250,7 +308,7 @@ La computadora tiene que estar **en el mismo WiFi** que el TV.
 
 La primera vez el TV pregunta **"¿Permitir la depuración USB?"** → marcar "Permitir siempre" → **Permitir**. El script lo avisa y espera hasta 2 minutos.
 
-## 4. Qué hace el script (pasos 1–8)
+## 4. Qué hace el script (pasos 1–8, y 9–10 con `--retroarch` / `--kodi`)
 
 1. **Herramientas**: descarga las *platform-tools* oficiales de Google (`dl.google.com/android/repository/platform-tools-latest-{darwin,windows}.zip`) a una carpeta del usuario (se reutilizan en la siguiente vez) y el paquete de este repo (`github.com/coplic/luk-home-installer/archive/refs/heads/main.zip`, ~18 MB: APKs + temas + íconos). Comprueba los APK con `bundle/SHA256SUMS`.
 2. **Conexión**: `adb connect IP:5555`. Si el TV pide permiso, muestra el aviso grande y espera. Detecta TV apagado / IP equivocada / ADB apagado.
@@ -301,6 +359,9 @@ La primera vez el TV pregunta **"¿Permitir la depuración USB?"** → marcar "P
    (`apps/`) para la próxima vez. Con `--simular` descarga y compara, pero no instala ni cambia el dock. Al final muestra
    **LISTO** con una línea `Apps: …` (p. ej. `Stremio 1.9.12 → 1.10.4 · IPTV Smarters 4.0.6 → 3.1.5.1 gratis (login y listas borrados) · TizenTube al día`).
    El paso 8 corre cuando Luk Home ya quedó instalado y comprobado: si falla o se cancela, Luk Home queda bien igual.
+
+9. **RetroArch** (solo con `--retroarch` / `$RETROARCH=1`): ver "RetroArch y Kodi (opcionales)" arriba.
+10. **Kodi** (solo con `--kodi` / `$KODI=1`): ver "RetroArch y Kodi (opcionales)" arriba.
 
 Si algo falla en los pasos 6–7, **devuelve los ajustes del botón Inicio (y el acceso de uso en Fire OS 6) como estaban** antes de salir.
 
@@ -373,12 +434,23 @@ bundle/
   tiles/<paquete>.png + .txt   íconos y nombres personalizados
   logo.png                  logo de la marca (Coplic), arriba a la derecha debajo de Temas/Ajustes
   rotate.txt                20 (segundos)
+  retroarch/                --retroarch: tv-retroarch.sh (corre en el TV), cores.txt, ext/retroarch.cfg,
+                            ext/autoconfig/ (mandos), ra/config/*/*.opt, ra/system/mame2003-plus/hiscore.dat
+                            (el APK y los núcleos se bajan de buildbot.libretro.com; sin ROMs ni BIOS)
+  kodi/kodi-sala.sh         --kodi en Mac (el instalador del Kodi de la sala); el build va en el Release kodi-build-2026-11-09
 ```
 
 Los tres APK son compilaciones *debug* firmadas con la misma llave (necesario para `run-as`). Al actualizar un APK: reemplazarlo en `bundle/apks/`, regenerar `bundle/SHA256SUMS` (`cd bundle && shasum -a 256 apks/*.apk logo.png > SHA256SUMS`) y hacer push. GitHub puede tardar ~5 min en servir el archivo nuevo.
 
 ## Cambios
 
+- **2026-11-10a:** Dos opciones nuevas, **apagadas por defecto** (sin ellas todo funciona igual que en 2026-11-07a):
+  `--retroarch` (Windows `$RETROARCH=1;`) instala o actualiza RetroArch 1.22.2 oficial con la configuración del TV del
+  cuarto (cfg, 7 núcleos oficiales, opciones de FCEUmm / MAME 2003-Plus, mandos, hiscore.dat, carpetas de juegos vacías en
+  `/sdcard/ROMs`; sin ROMs ni BIOS; Play Protect: Más detalles > Instalar de todas formas), y `--kodi` (Windows `$KODI=1;`,
+  `--reemplazar-kodi` / `$KODIREEMPLAZAR=1;`) instala Kodi 21.3 con el build de la sala desde el Release
+  `kodi-build-2026-11-09` (sha256 fijo; TorBox se vuelve a iniciar en POV, Umbrella y ResolveURL). Pasos 9 y 10. Nuevos
+  `bundle/retroarch/` y `bundle/kodi/`. Los APK de Luk Home, temas, `SHA256SUMS` y el paso 8 no cambian.
 - **2026-11-07a:** Temas personalizados nuevos **`barcelona`** (botón Temas: "Barcelona") y **`real-madrid-3`**
   (botón Temas: "Real Madrid Amiga"). Cada uno tiene 10 fondos 1920×1080. No están en `order.txt` ni en las líneas
   genéricas de copiar y pegar: un cliente genérico no los recibe. Se piden por nombre (`barcelona`, `real-madrid-3`,

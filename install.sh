@@ -35,6 +35,15 @@
 #   --estilo=colores      tarjetas de colores (rayas y brillo, logo en una burbuja). También ESTILO=colores antes de bash.
 #                         Sin --estilo el TV se queda con el que tenga (uno nuevo empieza en oscuro). En el TV se cambia
 #                         en el botón de Temas (paleta), sección "Estilo".
+#   --retroarch      ADEMÁS instala o actualiza RetroArch oficial (libretro) con la configuración del TV del cuarto:
+#                    retroarch.cfg, 7 núcleos (FinalBurn Neo, MAME 2003-Plus, FCEUmm, Mupen64Plus-Next, Flycast,
+#                    Genesis Plus GX, PCSX ReARMed), opciones de FCEUmm y MAME 2003-Plus, mandos (autoconfig),
+#                    hiscore.dat y carpetas de juegos vacías en /sdcard/ROMs. Sin ROMs ni BIOS. (También RETROARCH=1)
+#   --kodi           ADEMÁS instala o actualiza Kodi 21.3 con el build de la sala (repos, addons y ajustes, sin
+#                    cuentas: TorBox se vuelve a iniciar en POV, Umbrella y ResolveURL). BORRA los datos del Kodi que
+#                    tenga el TV (antes los respalda en la computadora). (También KODI=1)
+#   --reemplazar-kodi  con --kodi: si el TV tiene un Kodi incompatible (64 bits u otra versión), lo cambia.
+#                    Sin --retroarch / --kodi no se toca RetroArch ni Kodi.
 #
 # Solo modo "launcher": no borra ni desinstala ninguna app del cliente (salvo cambiar una IPTV Smarters que no sea
 # la gratis de Troypoint, ver abajo). Lo único que toca de apps es
@@ -43,7 +52,7 @@
 # procesador y el Android del TV, y las agrega al dock. IPTV Smarters: siempre la GRATIS 3.1.5.1 de Troypoint
 # (MediaFire, sha256 fijo). Si falta, se instala; si el TV tiene otra (ej. la 4.0.6 de pago), se cambia por esa
 # (se desinstala primero: se borran el login y las listas de Smarters); si ya es esa, no se toca. Nunca se
-# actualiza a versiones de pago. Ninguna otra app se toca.
+# actualiza a versiones de pago. Ninguna otra app se toca (RetroArch y Kodi solo con --retroarch / --kodi).
 # Variables para pruebas: LUK_BUNDLE_URL (zip del repo), LUK_ADB (usar otro adb), LUK_HOME_DIR (carpeta de trabajo).
 
 main() {
@@ -63,7 +72,7 @@ main() {
 
   # ---------- argumentos ----------
   local APPS_ENV="${APPS:-}"   # variable APPS= de afuera (antes de que la tape la local)
-  local IP="" PIN="" THEME="" THEME_GIVEN=0 CITY="" CITY_SKIP=0 APPS="" APPS_NEXT=0 NPOS=0 DRY=0 NEW_DOCK=0 NOUPD="${LUK_NOUPDATE:-0}" NOAPPS="${LUK_SINAPPS:-0}" BTN="${LUK_BOTONES:-}" ESTILO_ARG="${ESTILO:-${LUK_ESTILO:-}}" a
+  local IP="" PIN="" THEME="" THEME_GIVEN=0 CITY="" CITY_SKIP=0 APPS="" APPS_NEXT=0 NPOS=0 DRY=0 NEW_DOCK=0 NOUPD="${LUK_NOUPDATE:-0}" NOAPPS="${LUK_SINAPPS:-0}" RETRO="${LUK_RETROARCH:-${RETROARCH:-0}}" KODI_OPT="${LUK_KODI:-${KODI:-0}}" KODI_REPL=0 BTN="${LUK_BOTONES:-}" ESTILO_ARG="${ESTILO:-${LUK_ESTILO:-}}" a
   for a in "$@"; do
     if [ "$APPS_NEXT" = 1 ]; then APPS="$a"; APPS_NEXT=0; continue; fi
     case "$a" in
@@ -73,12 +82,15 @@ main() {
       --desbloquear-botones|--botones-normales) BTN=normal ;;
       --sin-actualizar|--no-update) NOUPD=1 ;;
       --sin-apps|--no-apps|--no-instalar-apps) NOAPPS=1 ;;
+      --retroarch|--retro|--emuladores) RETRO=1 ;;
+      --kodi) KODI_OPT=1 ;;
+      --reemplazar-kodi) KODI_OPT=1; KODI_REPL=1 ;;
       --apps) APPS_NEXT=1 ;;
       --apps=*) APPS="${a#--apps=}" ;;
       --estilo=*) ESTILO_ARG="${a#--estilo=}" ;;
       --oscuro) ESTILO_ARG=oscuro ;;
       --colores) ESTILO_ARG=colores ;;
-      -h|--help) sed -n '2,47p' "$0" 2>/dev/null || true; return 0 ;;
+      -h|--help) sed -n '2,57p' "$0" 2>/dev/null || true; return 0 ;;
       -|--) NPOS=$((NPOS + 1))
          case "$NPOS" in 2) PIN="-" ;; 4) CITY_SKIP=1 ;; 3) THEME="todos" ;; esac ;;   # "-" = no cambiar / por defecto
       -*) printf 'Opción desconocida: %s\n' "$a"; return 2 ;;
@@ -93,6 +105,8 @@ main() {
   if [ -z "$THEME" ] && [ -n "${LUK_THEME:-}" ]; then THEME="$LUK_THEME"; THEME_GIVEN=1; fi
   case "$NOUPD" in 1|si|sí|yes|true) NOUPD=1 ;; *) NOUPD=0 ;; esac
   case "$NOAPPS" in 1|si|sí|yes|true) NOAPPS=1 ;; *) NOAPPS=0 ;; esac
+  case "$RETRO" in 1|si|sí|yes|true) RETRO=1 ;; *) RETRO=0 ;; esac
+  case "$KODI_OPT" in 1|si|sí|yes|true) KODI_OPT=1 ;; *) KODI_OPT=0 ;; esac
   # Estilo de las tarjetas del inicio (files/dock-style.txt, 2026-11-02d): oscuro | colores | vacío = no cambiar
   case "$(printf '%s' "$ESTILO_ARG" | tr 'A-Z' 'a-z' | tr -d ' ')" in
     '') ESTILO_ARG="" ;;
@@ -123,7 +137,7 @@ main() {
   : > "$LOG"
   say()   { printf '%s\n' "$*"; printf '%s\n' "$*" | sed $'s/\033\\[[0-9;]*m//g' >> "$LOG"; }
   logq()  { printf '%s\n' "$*" >> "$LOG"; }
-  NSTEP=8
+  NSTEP=$((8 + RETRO + KODI_OPT))   # 9.º / 10.º paso solo con --retroarch / --kodi
   paso()  { say ""; say "${B}${C}[$1/$NSTEP] $2${N}"; }
   bien()  { say "   ${G}✔${N} $*"; }
   aviso() { say "   ${Y}!${N} $*"; }
@@ -809,6 +823,155 @@ $(printf '%s\n' $EXTRA_PKGS)"
     return 0
   }
 
+
+  # ---------- RetroArch del cuarto (opcional: --retroarch / RETROARCH=1) ----------
+  # Instala o actualiza (adb install -r, sin desinstalar) el RetroArch OFICIAL de buildbot.libretro.com
+  # (sha256 fijo) y deja la configuración del TV del cuarto: retroarch.cfg, 7 núcleos oficiales, opciones de
+  # FCEUmm / MAME 2003-Plus, perfiles de mandos (autoconfig), hiscore.dat y las carpetas de juegos vacías.
+  # Nunca lleva ni borra ROMs, partidas, estados ni BIOS. Antes de pisar la configuración la respalda en la computadora.
+  local RA_SUM="" KODI_SUM=""
+  local RA_VER=1.22.2
+  local RA_CORES="fbneo mame2003_plus fceumm mupen64plus_next_gles3 flycast genesis_plus_gx pcsx_rearmed"
+  ra_install() {   # $1 = apk: instala con reintentos si Play Protect lo frena
+    local try=1 o
+    while :; do
+      case "$PLATFORM" in Google*|Android*)
+        say "   ${Y}Si en el TV sale \"Bloqueada por Play Protect\" / \"App no segura\": elige ${B}Más detalles${N}${Y} > ${B}Instalar de todas formas${N}${Y}.${N}" ;;
+      esac
+      o=$(A install -r -g "$1" 2>&1 | tr -d '\r'); logq "ra install ($try): $o"
+      case "$o" in
+        *Success*) return 0 ;;
+        *VERIFICATION*|*REJECTED*|*BLOCKED*|*ABORTED*|*"Play Protect"*|*USER_RESTRICTED*|*"Session"*)
+          if [ "$try" -lt 3 ]; then
+            aviso "Play Protect frenó la instalación de RetroArch (intento $try de 3)."
+            say "   En la pantalla del TV: ${B}Más detalles${N} > ${B}Instalar de todas formas${N}. No hace falta apagar Play Protect."
+            say "   Reintentando en 10 segundos..."; sleep 10; try=$((try + 1)); continue
+          fi
+          RA_ERR="Play Protect no dejó instalar RetroArch (en el TV: Más detalles > Instalar de todas formas, y repite la línea)"; return 1 ;;
+        *UPDATE_INCOMPATIBLE*|*SIGNATURES*) RA_ERR="el TV ya tiene un RetroArch con otra firma (no se desinstala; quítalo a mano si quieres el oficial)"; return 1 ;;
+        *INSUFFICIENT_STORAGE*) RA_ERR="no hay espacio en el TV para RetroArch"; return 1 ;;
+        *) RA_ERR="la instalación falló: $(printf '%s' "$o" | tail -1)"; return 1 ;;
+      esac
+    done
+  }
+  ra_elf() {   # $1 = .so ; $2 = 32|64 -> 0 si es un ELF ARM de esa clase
+    [ "$(head -c 4 "$1" 2>/dev/null | od -An -c | tr -d ' ')" = '177ELF' ] || return 1
+    local cl; cl=$(od -An -tu1 -j4 -N1 "$1" | tr -d ' ')
+    { [ "$2" = 32 ] && [ "$cl" = 1 ]; } || { [ "$2" = 64 ] && [ "$cl" = 2 ]; }
+  }
+  retroarch_paso() {
+    local n=$1 RPKG RAPK RSHA RVC CABI BITS IVC have=0 dir st f c u ok=0 out bkr="" RA_ERR=""
+    paso "$n" "RetroArch con los emuladores del cuarto (--retroarch)"
+    if inlist com.retroarch.aarch64 "$INSTALLED" && ! inlist com.retroarch.ra32 "$INSTALLED"; then CABI=arm64-v8a
+    else case ",$ABIS," in *,armeabi-v7a,*) CABI=armeabi-v7a ;; *,arm64-v8a,*) CABI=arm64-v8a ;; *) CABI="" ;; esac; fi
+    case "$CABI" in
+      armeabi-v7a) RPKG=com.retroarch.ra32; RAPK=RetroArch_ra32.apk; BITS=32
+                   RSHA=9e964f53089a302401a6d5b1451d7ce5539f39b85eb0a305d8d77e6edcbf803f; RVC=1763607285 ;;
+      arm64-v8a)   RPKG=com.retroarch.aarch64; RAPK=RetroArch_aarch64.apk; BITS=64
+                   RSHA=7bd5d208dfe93cc8e2ea6c04608948ce1a045980f160a58ca2d0993aa20ad213; RVC=1763607214 ;;
+      *) aviso "Este TV no tiene procesador ARM ($ABIS): RetroArch no se instala."; RA_SUM="no (procesador $ABIS)"; return 0 ;;
+    esac
+    [ "$SDK" -ge 21 ] || { aviso "Android muy viejo para RetroArch (API $SDK)."; RA_SUM="no (API $SDK)"; return 0; }
+    inlist "$RPKG" "$INSTALLED" && have=1
+    if [ "$have" = 1 ]; then IVC=$(S dumpsys package "$RPKG" | sed -n 's/.*versionCode=\([0-9]*\).*/\1/p' | head -1); bien "RetroArch ya está ($RPKG, versionCode ${IVC:-?})"
+    else bien "RetroArch no está: se instala el oficial $RA_VER ($CABI)"; fi
+    case "$(S dumpsys window | grep -m1 mCurrentFocus)" in *"$RPKG"*)
+      aviso "RetroArch está abierto en el TV ahora mismo (alguien jugando): no se toca. Ciérralo y repite la línea."; RA_SUM="no (estaba abierto)"; return 0 ;;
+    esac
+    if [ "$have" = 0 ] && [ "${FREE:-0}" -gt 0 ] && [ "$FREE" -lt 700000 ]; then
+      aviso "Poco espacio en el TV ($((FREE / 1024)) MB; RetroArch necesita ~700 MB). No se instala."; RA_SUM="no (sin espacio)"; return 0
+    fi
+    dir="$WORK/apps/retroarch"; mkdir -p "$dir/cores-$CABI"
+    f="$dir/$RAPK"
+    if [ ! -f "$f" ] || [ "$(sha "$f")" != "$RSHA" ]; then
+      say "   Descargando RetroArch $RA_VER oficial (buildbot.libretro.com, ~180 MB)..."
+      dl "https://buildbot.libretro.com/stable/$RA_VER/android/$RAPK" "$f.part" && mv "$f.part" "$f" || rm -f "$f.part"
+    fi
+    if [ ! -f "$f" ] || [ "$(sha "$f")" != "$RSHA" ]; then rm -f "$f"; aviso "No se pudo bajar RetroArch oficial (o no coincide el sha256). No se instala."; RA_SUM="no (descarga)"; return 0; fi
+    bien "RetroArch $RA_VER verificado (sha256 ${RSHA:0:12}…)"
+    st="$dir/stage/lukra"; rm -rf "$dir/stage"; mkdir -p "$st/cores" "$st/info"
+    cp -R "$BUNDLE/retroarch/ext" "$BUNDLE/retroarch/ra" "$st/" && cp "$BUNDLE/retroarch/tv-retroarch.sh" "$st/" || { aviso "Faltan archivos de RetroArch en el paquete."; RA_SUM="no (paquete incompleto)"; return 0; }
+    say "   Descargando los 7 núcleos oficiales ($CABI) de buildbot.libretro.com..."
+    for c in $RA_CORES; do
+      u="https://buildbot.libretro.com/nightly/android/latest/$CABI/${c}_libretro_android.so.zip"
+      rm -rf "$dir/tmp"; mkdir -p "$dir/tmp"
+      if dl "$u" "$dir/tmp/c.zip" && unz "$dir/tmp/c.zip" "$dir/tmp" && ra_elf "$dir/tmp/${c}_libretro_android.so" "$BITS"; then
+        mv -f "$dir/tmp/${c}_libretro_android.so" "$dir/cores-$CABI/"
+      elif [ -f "$dir/cores-$CABI/${c}_libretro_android.so" ]; then aviso "No se pudo bajar $c ahora; se usa el que ya estaba en la computadora"
+      else aviso "No se pudo bajar el núcleo $c"; fi
+      [ -f "$dir/cores-$CABI/${c}_libretro_android.so" ] && cp "$dir/cores-$CABI/${c}_libretro_android.so" "$st/cores/" && ok=$((ok + 1))
+    done
+    rm -rf "$dir/tmp"
+    bien "Núcleos listos: $ok de 7"
+    if dl https://buildbot.libretro.com/assets/frontend/info.zip "$dir/info.zip" && unz "$dir/info.zip" "$st/info"; then
+      bien "Fichas de núcleos (info) oficiales: $(find "$st/info" -name '*.info' | wc -l | tr -d ' ')"
+    else aviso "No se pudieron bajar las fichas de núcleos (info); RetroArch funciona igual"; fi
+    if [ "$DRY" = 1 ]; then
+      sh -n "$st/tv-retroarch.sh" 2>>"$LOG" || bash -n "$st/tv-retroarch.sh" 2>>"$LOG" || aviso "tv-retroarch.sh tiene un error de sintaxis"
+      if [ "$have" = 1 ] && [ "${IVC:-0}" -gt "$RVC" ]; then sim "RetroArch del TV es más nuevo ($IVC): no se reinstala"
+      else sim "adb install -r -g $RAPK  (Google TV: Play Protect > Más detalles > Instalar de todas formas)"; fi
+      sim "respaldo de retroarch.cfg y opciones a $WORK/respaldos/; copiar retroarch.cfg, $ok núcleos, $(find "$st/ext/autoconfig" -name '*.cfg' | wc -l | tr -d ' ') perfiles de mandos, FCEUmm.opt, MAME 2003-Plus.opt, hiscore.dat"
+      sim "carpetas vacías en /sdcard/ROMs: Nintendo - NES, Arcade - Mame 2003 Plus, Nintendo - N64, SNK - NEO GEO, fbneo_1_0_0_3_best/{games,samples}"
+      rm -rf "$dir/stage"; RA_SUM="simulado ($ok núcleos)"; return 0
+    fi
+    if [ "$have" = 1 ] && [ "${IVC:-0}" -gt "$RVC" ]; then bien "El RetroArch del TV es más nuevo que el $RA_VER: se deja (no se baja de versión)"
+    else
+      say "   Instalando RetroArch (conserva juegos, partidas y ajustes que tenga)..."
+      if ra_install "$f"; then bien "RetroArch $RA_VER instalado"
+      else aviso "RetroArch: $RA_ERR"; RA_SUM="no ($RA_ERR)"; rm -rf "$dir/stage"; return 0; fi
+    fi
+    # Respaldo de la configuración que ya tenía (en la computadora) antes de pisarla
+    local EXTD="/storage/emulated/0/Android/data/$RPKG/files" RAD=/storage/emulated/0/RetroArch
+    if [ "$(S "[ -f $EXTD/retroarch.cfg ] && echo y")" = y ]; then
+      bkr="$WORK/respaldos/retroarch-${IP%%:*}-$TS"; mkdir -p "$bkr"
+      A exec-out cat "$EXTD/retroarch.cfg" > "$bkr/retroarch.cfg" 2>>"$LOG"
+      A exec-out cat "$RAD/config/FCEUmm/FCEUmm.opt" > "$bkr/FCEUmm.opt" 2>/dev/null
+      A exec-out cat "$RAD/config/MAME 2003-Plus/MAME 2003-Plus.opt" > "$bkr/MAME 2003-Plus.opt" 2>/dev/null
+      find "$bkr" -type f -size 0 -delete 2>/dev/null
+      bien "Respaldo de la configuración de RetroArch: $bkr"
+    fi
+    say "   Copiando configuración, mandos y núcleos (RetroArch se abre y se cierra solo unas veces)..."
+    A shell rm -rf /data/local/tmp/lukra >/dev/null 2>&1
+    out=$(A push "$st" /data/local/tmp/ 2>&1 | tr -d '\r'); logq "ra push: $out"
+    case "$out" in *error*|*failed*|*"No space"*) aviso "No se pudieron copiar los archivos de RetroArch al TV"; RA_SUM="no (copia)"; rm -rf "$dir/stage"; return 0 ;; esac
+    out=$(A shell sh /data/local/tmp/lukra/tv-retroarch.sh "$RPKG" "$SDK" "$CABI" 2>&1 | tr -d '\r'); logq "ra apply: $out"
+    A shell rm -rf /data/local/tmp/lukra >/dev/null 2>&1; rm -rf "$dir/stage"
+    case "$out" in
+      *RA_OK*)
+        bien "Núcleos instalados en RetroArch: $(printf '%s' "$out" | sed -n 's/^RA_CORES //p' | head -1)"
+        bien "Configuración del cuarto puesta: $(printf '%s' "$out" | sed -n 's/^RA_OK //p' | head -1)"
+        case "$out" in *FALLARON*) aviso "Algún núcleo no se pudo instalar; se puede bajar en RetroArch: Menú principal > Actualizador en línea > Descargar núcleos" ;; esac
+        RA_SUM="RetroArch $RA_VER listo ($(printf '%s' "$out" | sed -n 's/^RA_CORES \([0-9]*\/[0-9]*\).*/\1/p' | head -1) núcleos)" ;;
+      *) aviso "RetroArch quedó instalado, pero la configuración falló: $(printf '%s' "$out" | grep RA_FAIL | head -1)"; RA_SUM="instalado, configuración falló" ;;
+    esac
+    A shell input keyevent KEYCODE_HOME >/dev/null 2>&1   # volver al inicio (Luk Home) después de abrir/cerrar RetroArch
+    return 0
+  }
+
+  # ---------- Kodi de la sala (opcional: --kodi / KODI=1) ----------
+  # Usa bundle/kodi/kodi-sala.sh (el mismo instalador del Kodi de la sala): Kodi 21.3 oficial con sha256, revisa
+  # ABI/API, respalda el Kodi que haya, pm clear SOLO de Kodi, permisos, primera apertura, copia del build por
+  # tar en /data/local/tmp. El build (kodi-sala.zip, >100 MB) se baja del Release kodi-build-2026-11-09 de este repo.
+  kodi_paso() {
+    local n=$1 ka=""
+    paso "$n" "Kodi con el build de la sala (--kodi)"
+    [ -f "$BUNDLE/kodi/kodi-sala.sh" ] || { aviso "Falta bundle/kodi/kodi-sala.sh en el paquete"; KODI_SUM="no (paquete incompleto)"; return 0; }
+    [ "$DRY" = 1 ] && ka="--dry-run"
+    [ "$KODI_REPL" = 1 ] && ka="$ka --reemplazar-kodi"
+    if KODI_ADB="$ADB" KODI_SALA_DIR="$WORK/kodi" KODI_PASO_PREFIX="Kodi " bash "$BUNDLE/kodi/kodi-sala.sh" "$IP" $ka; then
+      if [ "$DRY" = 1 ]; then KODI_SUM="simulado"; else KODI_SUM="Kodi con el build de la sala listo (TorBox: iniciar sesión otra vez en POV, Umbrella y ResolveURL)"; fi
+    else
+      aviso "Kodi no se pudo terminar (ver arriba). Luk Home y lo demás ya quedaron."; KODI_SUM="no (ver mensaje de Kodi)"
+    fi
+    return 0
+  }
+  extras() {   # pasos opcionales después del 8
+    local k=9
+    if [ "$RETRO" = 1 ]; then retroarch_paso $k; k=$((k + 1)); fi
+    if [ "$KODI_OPT" = 1 ]; then kodi_paso $k; fi
+    return 0
+  }
+
   say ""
   say "${B}=================================================${N}"
   say "${B}   Instalador de Luk Home${N}"
@@ -832,7 +995,7 @@ $(printf '%s\n' $EXTRA_PKGS)"
     PIN_HASH=$(printf '%s' "$PIN" | { if command -v shasum >/dev/null 2>&1; then shasum -a 256; else sha256sum; fi; } | awk '{print $1}')
   fi
   case "$IP" in *:*) SERIAL="$IP" ;; *) SERIAL="$IP:5555" ;; esac
-  logq "ip=$IP theme=$THEME city=${CITY:-(sin cambio)} apps=${APPS:-(ninguna)} dry=$DRY new_dock=$NEW_DOCK noupdate=$NOUPD noapps=$NOAPPS buttons=${BTN:-(sin cambio)} estilo=${ESTILO_ARG:-(sin cambio)} pin_set=$([ -n "$PIN" ] && echo yes || echo no) os=$(uname -a)"
+  logq "ip=$IP theme=$THEME city=${CITY:-(sin cambio)} apps=${APPS:-(ninguna)} dry=$DRY new_dock=$NEW_DOCK noupdate=$NOUPD noapps=$NOAPPS buttons=${BTN:-(sin cambio)} estilo=${ESTILO_ARG:-(sin cambio)} retroarch=$RETRO kodi=$KODI_OPT pin_set=$([ -n "$PIN" ] && echo yes || echo no) os=$(uname -a)"
 
   # ---------- 1. herramientas ----------
   paso 1 "Preparando las herramientas (solo la primera vez tarda un poco)"
@@ -1241,9 +1404,12 @@ EOS
     sim "abrir Luk Home (am start --ez reload true) y pulsar Inicio para comprobar"
     SUCCESS=1
     actualizar_apps
+    extras
     say ""
     say "${G}${B}  SIMULACIÓN TERMINADA SIN ERRORES — no se cambió nada en el TV.${N}"
     say "  Apps: $UPD_SUM"
+    [ -n "$RA_SUM" ] && say "  RetroArch: $RA_SUM"
+    [ -n "$KODI_SUM" ] && say "  Kodi: $KODI_SUM"
     say "  Respaldo de lectura: $BK"
     say "  Registro: $LOG"
     return 0
@@ -1284,6 +1450,7 @@ EOS
   SUCCESS=1
   ACC_CHANGED=0; HOME_CHANGED=0; UOP_CHANGED=0   # comprobado: lo hecho se queda aunque falle o se cancele el paso 8
   actualizar_apps
+  extras
   say ""
   say "${G}${B}  ██      ██  ███████  ████████  ██████  ${N}"
   say "${G}${B}  ██      ██  ██          ██    ██    ██ ${N}"
@@ -1296,6 +1463,8 @@ EOS
   say "  • Botón del tiempo (arriba a la derecha): temperatura, pronóstico y \"Cambiar ciudad\"."
   say "  • Ajustes queda protegido con PIN."
   say "  • Apps: $UPD_SUM"
+  [ -n "$RA_SUM" ] && say "  • RetroArch: $RA_SUM (juegos en /sdcard/ROMs o en una memoria USB; sin ROMs ni BIOS)"
+  [ -n "$KODI_SUM" ] && say "  • Kodi: $KODI_SUM"
   say "  • Ya puedes cerrar esta ventana."
   say ""
   say "  (Respaldo: $BK)"

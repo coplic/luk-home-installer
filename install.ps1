@@ -22,6 +22,14 @@
 #   $APPS='netflix,youtube,disney'  apps del cliente que tambien van al inicio, despues de Stremio / IPTV Smarters /
 #                TizenTube (o el paquete exacto, ej. com.netflix.ninja; 'todas' = todas las que ya tiene). Las que no
 #                esten instaladas se saltan con un aviso. Si el TV ya tenia dock, se agregan al final. No instala nada.
+#   $RETROARCH=1  ADEMAS instala o actualiza RetroArch oficial (libretro) con la configuracion del TV del cuarto:
+#                retroarch.cfg, 7 nucleos (FinalBurn Neo, MAME 2003-Plus, FCEUmm, Mupen64Plus-Next, Flycast, Genesis
+#                Plus GX, PCSX ReARMed), opciones de FCEUmm y MAME 2003-Plus, mandos (autoconfig), hiscore.dat y
+#                carpetas de juegos vacias en /sdcard/ROMs. Sin ROMs ni BIOS.
+#   $KODI=1      ADEMAS instala o actualiza Kodi 21.3 con el build de la sala (repos, addons y ajustes, sin cuentas:
+#                TorBox se vuelve a iniciar en POV, Umbrella y ResolveURL). BORRA los datos del Kodi que tenga el TV
+#                (antes los respalda en la computadora). $KODIREEMPLAZAR=1: cambia un Kodi incompatible (64 bits u otra version).
+#                Sin $RETROARCH / $KODI no se toca RetroArch ni Kodi.
 # PIN: 4 numeros, o 'sinpin' para no poner PIN.
 # Solo modo "launcher": no borra ni desinstala ninguna app del cliente. Lo unico que toca de apps es
 # Stremio / TizenTube (paso 8): si ya estan, las actualiza (adb install -r, conserva datos y sesiones) cuando
@@ -34,7 +42,7 @@
 # (Este archivo es solo ASCII a proposito: asi se lee igual en cualquier consola de Windows.)
 
 & {
-  param($IP, $PIN, $THEME, $DRYRUN, $NUEVODOCK, $BURL, $ADBOVR, $HOMEDIR, $NOUPDATE, $CIUDAD, $APPS, $BOTONES, $ESTILO, $SINAPPS)
+  param($IP, $PIN, $THEME, $DRYRUN, $NUEVODOCK, $BURL, $ADBOVR, $HOMEDIR, $NOUPDATE, $CIUDAD, $APPS, $BOTONES, $ESTILO, $SINAPPS, $RETROARCH, $KODI, $KODIREEMPLAZAR)
 
   $ErrorActionPreference = 'Stop'
   $ProgressPreference = 'SilentlyContinue'
@@ -53,7 +61,7 @@
   # Estado compartido (hashtable: las funciones internas lo modifican por referencia)
   $st = @{ adb = ''; serial = ''; accChanged = $false; homeChanged = $false; uopChanged = $false; success = $false
            oldSvc = ''; oldEn = ''; oldHome = ''; oldUop = ''; log = ''; stage = ''; updSum = 'no se revisaron'
-           newInst = @(); appsTouched = $false; dockTouched = $false; apkF = '' }
+           newInst = @(); appsTouched = $false; dockTouched = $false; apkF = ''; raSum = ''; kodiSum = ''; nstep = 8 }
 
   $IP = "$IP".Trim(); $PIN = "$PIN".Trim(); $THEME = "$THEME".Trim()
   $themeGiven = $THEME -ne ''
@@ -61,6 +69,10 @@
   $newDock = [bool]$NUEVODOCK -and "$NUEVODOCK" -ne '0'
   $noUpd = [bool]$NOUPDATE -and "$NOUPDATE" -ne '0'
   $noApps = [bool]$SINAPPS -and "$SINAPPS" -ne '0'
+  $retro = [bool]$RETROARCH -and "$RETROARCH" -ne '0'
+  $kodiRepl = [bool]$KODIREEMPLAZAR -and "$KODIREEMPLAZAR" -ne '0'
+  $kodiOpt = ([bool]$KODI -and "$KODI" -ne '0') -or $kodiRepl
+  $st.nstep = 8 + [int]$retro + [int]$kodiOpt   # 9.o / 10.o paso solo con $RETROARCH / $KODI
   $btn = ''
   $b0 = "$BOTONES".Trim().ToLower()
   if (@('bloquear', 'on', 'si', '1', 'yes', 'true') -contains $b0) { $btn = 'on' }
@@ -91,7 +103,7 @@
 
   function LogQ([string]$m) { Add-Content -Path $st.log -Value $m -Encoding UTF8 }
   function Say([string]$m, [string]$c = 'Gray') { Write-Host $m -ForegroundColor $c; LogQ $m }
-  function Paso([int]$n, [string]$m) { Say ''; Say "[$n/8] $m" 'Cyan' }
+  function Paso([int]$n, [string]$m) { Say ''; Say "[$n/$($st.nstep)] $m" 'Cyan' }
   function Bien([string]$m) { Say "   OK  $m" 'Green' }
   function Aviso([string]$m) { Say "   !   $m" 'Yellow' }
   function Sim([string]$m) { Say "   [simulacion] $m" 'Yellow' }
@@ -226,6 +238,273 @@
   function Unzip([string]$zip, [string]$dir) {
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     [IO.Compression.ZipFile]::ExtractToDirectory($zip, $dir)
+  }
+
+  # ---------- RetroArch del cuarto (opcional: $RETROARCH=1) ----------
+  # Instala o actualiza (adb install -r, sin desinstalar) el RetroArch OFICIAL de buildbot.libretro.com (sha256 fijo)
+  # y deja la configuracion del TV del cuarto: retroarch.cfg, 7 nucleos oficiales, opciones de FCEUmm / MAME 2003-Plus,
+  # mandos (autoconfig), hiscore.dat y carpetas de juegos vacias. Nunca lleva ni borra ROMs, partidas, estados ni BIOS.
+  # Antes de pisar la configuracion la respalda en la computadora. Lo del TV lo hace bundle\retroarch\tv-retroarch.sh.
+  $RA_VER = '1.22.2'
+  $RA_CORES = @('fbneo', 'mame2003_plus', 'fceumm', 'mupen64plus_next_gles3', 'flycast', 'genesis_plus_gx', 'pcsx_rearmed')
+  function RaInstall([string]$apk) {
+    for ($try = 1; $try -le 3; $try++) {
+      if ($platform -notlike 'Fire*') { Say '   Si en el TV sale "Bloqueada por Play Protect" / "App no segura": elige Mas detalles > Instalar de todas formas.' 'Yellow' }
+      $o = A install -r -g $apk; LogQ "ra install ($try): $o"
+      if ($o -match 'Success') { return '' }
+      if ($o -match 'VERIFICATION|REJECTED|BLOCKED|ABORTED|Play Protect|USER_RESTRICTED|Session') {
+        if ($try -lt 3) {
+          Aviso "Play Protect freno la instalacion de RetroArch (intento $try de 3)."
+          Say '   En la pantalla del TV: Mas detalles > Instalar de todas formas. No hace falta apagar Play Protect.'
+          Say '   Reintentando en 10 segundos...'; Start-Sleep -Seconds 10; continue
+        }
+        return 'Play Protect no dejo instalar RetroArch (en el TV: Mas detalles > Instalar de todas formas, y repite la linea)'
+      }
+      if ($o -match 'UPDATE_INCOMPATIBLE|SIGNATURES') { return 'el TV ya tiene un RetroArch con otra firma (no se desinstala; quitalo a mano si quieres el oficial)' }
+      if ($o -match 'INSUFFICIENT_STORAGE') { return 'no hay espacio en el TV para RetroArch' }
+      return ('la instalacion fallo: ' + (($o -split "`n")[-1]))
+    }
+    return 'la instalacion fallo'
+  }
+  function RaElf([string]$f, [int]$bits) {
+    if (-not (Test-Path $f)) { return $false }
+    $b = New-Object byte[] 5
+    $fs = [IO.File]::OpenRead($f); try { [void]$fs.Read($b, 0, 5) } finally { $fs.Close() }
+    $cls = 1; if ($bits -eq 64) { $cls = 2 }
+    return ($b[0] -eq 0x7f -and $b[1] -eq 0x45 -and $b[2] -eq 0x4c -and $b[3] -eq 0x46 -and $b[4] -eq $cls)
+  }
+  function DumpVc([string]$p) {
+    $d = S dumpsys package $p
+    $vc = 0; if ($d -match 'versionCode=(\d+)') { [void][long]::TryParse($Matches[1], [ref]$vc) }
+    $ab = ''; if ($d -match 'primaryCpuAbi=(\S+)') { $ab = $Matches[1] }
+    @{ vc = $vc; abi = $ab }
+  }
+  function RetroArchPaso([int]$n) {
+    Paso $n 'RetroArch con los emuladores del cuarto ($RETROARCH=1)'
+    $al = @("$abis" -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+    $cabi = ''
+    if (($installed -contains 'com.retroarch.aarch64') -and -not ($installed -contains 'com.retroarch.ra32')) { $cabi = 'arm64-v8a' }
+    elseif ($al -contains 'armeabi-v7a') { $cabi = 'armeabi-v7a' }
+    elseif ($al -contains 'arm64-v8a') { $cabi = 'arm64-v8a' }
+    if ($cabi -eq 'armeabi-v7a') { $rpkg = 'com.retroarch.ra32'; $rapk = 'RetroArch_ra32.apk'; $bits = 32; $rsha = '9e964f53089a302401a6d5b1451d7ce5539f39b85eb0a305d8d77e6edcbf803f'; $rvc = 1763607285 }
+    elseif ($cabi -eq 'arm64-v8a') { $rpkg = 'com.retroarch.aarch64'; $rapk = 'RetroArch_aarch64.apk'; $bits = 64; $rsha = '7bd5d208dfe93cc8e2ea6c04608948ce1a045980f160a58ca2d0993aa20ad213'; $rvc = 1763607214 }
+    else { Aviso "Este TV no tiene procesador ARM ($abis): RetroArch no se instala."; $st.raSum = "no (procesador $abis)"; return }
+    if ($sdk -lt 21) { Aviso "Android muy viejo para RetroArch (API $sdk)."; $st.raSum = "no (API $sdk)"; return }
+    $have = $installed -contains $rpkg; $ivc = 0
+    if ($have) { $ivc = (DumpVc $rpkg).vc; Bien "RetroArch ya esta ($rpkg, versionCode $ivc)" }
+    else { Bien "RetroArch no esta: se instala el oficial $RA_VER ($cabi)" }
+    if ((S dumpsys window) -match "mCurrentFocus[^`n]*$([regex]::Escape($rpkg))") {
+      Aviso 'RetroArch esta abierto en el TV ahora mismo (alguien jugando): no se toca. Cierralo y repite la linea.'; $st.raSum = 'no (estaba abierto)'; return
+    }
+    if (-not $have -and $free -gt 0 -and $free -lt 700000) { Aviso "Poco espacio en el TV ($([int]($free/1024)) MB; RetroArch necesita ~700 MB). No se instala."; $st.raSum = 'no (sin espacio)'; return }
+    $dir = Join-Path $work 'apps\retroarch'; $cdir = Join-Path $dir "cores-$cabi"
+    New-Item -ItemType Directory -Force -Path $cdir | Out-Null
+    $f = Join-Path $dir $rapk
+    if (-not (Test-Path $f) -or (Sha256File $f) -ne $rsha) {
+      Say "   Descargando RetroArch $RA_VER oficial (buildbot.libretro.com, ~180 MB)..."
+      try { Download "https://buildbot.libretro.com/stable/$RA_VER/android/$rapk" "$f.part"; Move-Item -Force "$f.part" $f } catch { Remove-Item -Force -ErrorAction SilentlyContinue "$f.part" }
+    }
+    if (-not (Test-Path $f) -or (Sha256File $f) -ne $rsha) { Remove-Item -Force -ErrorAction SilentlyContinue $f; Aviso 'No se pudo bajar RetroArch oficial (o no coincide el sha256). No se instala.'; $st.raSum = 'no (descarga)'; return }
+    Bien "RetroArch $RA_VER verificado (sha256 $($rsha.Substring(0,12))...)"
+    $sroot = Join-Path $dir 'stage'; Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $sroot
+    $stg = Join-Path $sroot 'lukra'
+    New-Item -ItemType Directory -Force -Path (Join-Path $stg 'cores'), (Join-Path $stg 'info') | Out-Null
+    try {
+      Copy-Item -Recurse -Force (Join-Path $bundle 'retroarch\ext') $stg
+      Copy-Item -Recurse -Force (Join-Path $bundle 'retroarch\ra') $stg
+      Copy-Item -Force (Join-Path $bundle 'retroarch\tv-retroarch.sh') $stg
+    } catch { Aviso 'Faltan archivos de RetroArch en el paquete.'; $st.raSum = 'no (paquete incompleto)'; return }
+    Say "   Descargando los 7 nucleos oficiales ($cabi) de buildbot.libretro.com..."
+    $ok = 0
+    foreach ($c in $RA_CORES) {
+      $so = "${c}_libretro_android.so"; $tmp = Join-Path $dir 'tmp'
+      Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $tmp; New-Item -ItemType Directory -Force -Path $tmp | Out-Null
+      $got = $false
+      try { Download "https://buildbot.libretro.com/nightly/android/latest/$cabi/$so.zip" (Join-Path $tmp 'c.zip'); Unzip (Join-Path $tmp 'c.zip') (Join-Path $tmp 'x'); $got = RaElf (Join-Path $tmp "x\$so") $bits } catch { LogQ "core $c : $_" }
+      if ($got) { Move-Item -Force (Join-Path $tmp "x\$so") (Join-Path $cdir $so) }
+      elseif (Test-Path (Join-Path $cdir $so)) { Aviso "No se pudo bajar $c ahora; se usa el que ya estaba en la computadora" }
+      else { Aviso "No se pudo bajar el nucleo $c" }
+      if (Test-Path (Join-Path $cdir $so)) { Copy-Item -Force (Join-Path $cdir $so) (Join-Path $stg 'cores'); $ok++ }
+    }
+    Remove-Item -Recurse -Force -ErrorAction SilentlyContinue (Join-Path $dir 'tmp')
+    Bien "Nucleos listos: $ok de 7"
+    try {
+      Download 'https://buildbot.libretro.com/assets/frontend/info.zip' (Join-Path $dir 'info.zip')
+      Unzip (Join-Path $dir 'info.zip') (Join-Path $stg 'info')
+      Bien ("Fichas de nucleos (info) oficiales: " + @(Get-ChildItem -Path (Join-Path $stg 'info') -Filter *.info).Count)
+    } catch { Aviso 'No se pudieron bajar las fichas de nucleos (info); RetroArch funciona igual' }
+    $nauto = @(Get-ChildItem -Recurse -File -Path (Join-Path $stg 'ext\autoconfig') -Filter *.cfg).Count
+    if ($dry) {
+      if ($have -and $ivc -gt $rvc) { Sim "RetroArch del TV es mas nuevo ($ivc): no se reinstala" }
+      else { Sim "adb install -r -g $rapk  (Google TV: Play Protect > Mas detalles > Instalar de todas formas)" }
+      Sim "respaldo de retroarch.cfg y opciones en $work\respaldos; copiar retroarch.cfg, $ok nucleos, $nauto perfiles de mandos, FCEUmm.opt, MAME 2003-Plus.opt, hiscore.dat"
+      Sim 'carpetas vacias en /sdcard/ROMs: Nintendo - NES, Arcade - Mame 2003 Plus, Nintendo - N64, SNK - NEO GEO, fbneo_1_0_0_3_best/{games,samples}'
+      Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $sroot; $st.raSum = "simulado ($ok nucleos)"; return
+    }
+    if ($have -and $ivc -gt $rvc) { Bien "El RetroArch del TV es mas nuevo que el ${RA_VER}: se deja (no se baja de version)" }
+    else {
+      Say '   Instalando RetroArch (conserva juegos, partidas y ajustes que tenga)...'
+      $err = RaInstall $f
+      if ($err) { Aviso "RetroArch: $err"; $st.raSum = "no ($err)"; Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $sroot; return }
+      Bien "RetroArch $RA_VER instalado"
+    }
+    $extd = "/storage/emulated/0/Android/data/$rpkg/files"; $rad = '/storage/emulated/0/RetroArch'
+    if ((S "[ -f $extd/retroarch.cfg ] && echo y") -eq 'y') {
+      $bkr = Join-Path $work "respaldos\retroarch-$ipName-$ts"; New-Item -ItemType Directory -Force -Path $bkr | Out-Null
+      $pairs = @(@("$extd/retroarch.cfg", 'retroarch.cfg'), @("$rad/config/FCEUmm/FCEUmm.opt", 'FCEUmm.opt'), @("$rad/config/MAME 2003-Plus/MAME 2003-Plus.opt", 'MAME 2003-Plus.opt'))
+      foreach ($pr in $pairs) {
+        if ((S "[ -f '$($pr[0])' ] && echo y") -eq 'y') { WriteLF (Join-Path $bkr $pr[1]) ((A shell "cat '$($pr[0])'") + "`n") }
+      }
+      Bien "Respaldo de la configuracion de RetroArch: $bkr"
+    }
+    Say '   Copiando configuracion, mandos y nucleos (RetroArch se abre y se cierra solo unas veces)...'
+    A shell rm -rf /data/local/tmp/lukra | Out-Null
+    $out = A push $stg /data/local/tmp/; LogQ "ra push: $out"
+    if ($out -match 'error|failed|No space') { Aviso 'No se pudieron copiar los archivos de RetroArch al TV'; $st.raSum = 'no (copia)'; Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $sroot; return }
+    $out = A shell sh /data/local/tmp/lukra/tv-retroarch.sh $rpkg $sdk $cabi; LogQ "ra apply: $out"
+    A shell rm -rf /data/local/tmp/lukra | Out-Null; Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $sroot
+    if ($out -match 'RA_OK (.*)') {
+      $okline = $Matches[1]
+      $cl = ''; if ($out -match 'RA_CORES ([^\n]*)') { $cl = $Matches[1] }
+      Bien "Nucleos instalados en RetroArch: $cl"
+      Bien "Configuracion del cuarto puesta: $okline"
+      if ($cl -match 'FALLARON') { Aviso 'Algun nucleo no se pudo instalar; se puede bajar en RetroArch: Menu principal > Actualizador en linea > Descargar nucleos' }
+      $cn = ''; if ($cl -match '^(\d+/\d+)') { $cn = $Matches[1] }
+      $st.raSum = "RetroArch $RA_VER listo ($cn nucleos)"
+    } else {
+      $fl = (($out -split "`n") | Where-Object { $_ -match 'RA_FAIL' } | Select-Object -First 1)
+      Aviso "RetroArch quedo instalado, pero la configuracion fallo: $fl"; $st.raSum = 'instalado, configuracion fallo'
+    }
+    A shell input keyevent KEYCODE_HOME | Out-Null
+  }
+
+  # ---------- Kodi de la sala (opcional: $KODI=1) ----------
+  # Lo mismo que bundle/kodi/kodi-sala.sh (Mac): Kodi 21.3 oficial de kodi.tv (sha256), revisa ABI/API, respalda el
+  # Kodi que haya, pm clear SOLO de Kodi, permisos, primera apertura, copia del build (tar en /data/local/tmp).
+  # El build (kodi-sala.zip, >100 MB) se baja del Release kodi-build-2026-11-09 de este repo y se comprueba su sha256.
+  function KodiPaso([int]$n) {
+    Paso $n 'Kodi con el build de la sala ($KODI=1)'
+    $KPKG = 'org.xbmc.kodi'; $KVER = '21.3'; $KVCODE = 2103000
+    $apkUrl = 'https://mirrors.kodi.tv/releases/android/arm/kodi-21.3-Omega-armeabi-v7a.apk'
+    $apkSha = '12d75e895649f68f217e42c2d881a94fd3177d7b9a7937825852aed545520cc8'
+    $zipUrl = 'https://github.com/coplic/luk-home-installer/releases/download/kodi-build-2026-11-09/kodi-sala.zip'
+    $zipSha = '9759a041fcd896e5304521fe7fb6555ace5225d3da1cb2618f47e8f6d9ca4187'
+    $kw = Join-Path $work 'kodi'
+    New-Item -ItemType Directory -Force -Path (Join-Path $kw 'apk'), (Join-Path $kw 'respaldos') | Out-Null
+    $al = @("$abis" -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+    if ($al -notcontains 'armeabi-v7a') { Aviso "Este TV no acepta apps ARM de 32 bits ($abis): el build de la sala no funcionaria completo. Kodi no se toca."; $st.kodiSum = 'no (procesador)'; return }
+    if ($sdk -lt 21) { Aviso "Android demasiado viejo para Kodi 21 (API $sdk)."; $st.kodiSum = 'no (API)'; return }
+    if ((S dumpsys window) -match "mCurrentFocus[^`n]*org\.xbmc\.kodi") { Aviso 'Kodi esta abierto en el TV ahora mismo: no se toca. Cierralo y repite la linea.'; $st.kodiSum = 'no (estaba abierto)'; return }
+    $pz = Join-Path $kw 'kodi-sala.zip'
+    if ((Test-Path $pz) -and (Sha256File $pz) -eq $zipSha) { Bien "Paquete ya descargado antes ($pz)" }
+    else {
+      Say '   Descargando el build de la sala (~290 MB, tarda unos minutos)...'
+      try { Download $zipUrl "$pz.part"; Move-Item -Force "$pz.part" $pz }
+      catch { Remove-Item -Force -ErrorAction SilentlyContinue "$pz.part"; Aviso "No se pudo descargar el paquete del Kodi de la sala ($zipUrl). Kodi no se toco."; $st.kodiSum = 'no (descarga)'; return }
+      if ((Sha256File $pz) -ne $zipSha) { Remove-Item -Force $pz; Aviso 'El paquete descargado no coincide con el sha256 publicado. Kodi no se toco; repite la linea.'; $st.kodiSum = 'no (sha256)'; return }
+    }
+    Bien "Paquete verificado (sha256 $($zipSha.Substring(0,12))...)"
+    $stg = Join-Path $kw 'stage'; Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $stg
+    Say '   Descomprimiendo...'
+    try { Unzip $pz $stg } catch { Aviso 'El paquete esta danado (no se pudo descomprimir).'; $st.kodiSum = 'no (paquete)'; return }
+    $man = Get-ChildItem -Path $stg -Recurse -Depth 2 -Filter MANIFEST.txt | Select-Object -First 1
+    if (-not $man) { Aviso 'El paquete esta incompleto (falta MANIFEST.txt).'; $st.kodiSum = 'no (paquete)'; return }
+    $root = $man.Directory.FullName
+    if (-not (Test-Path (Join-Path $root '.kodi\addons')) -or -not (Test-Path (Join-Path $root '.kodi\userdata'))) { Aviso 'El paquete esta incompleto (faltan .kodi/addons o .kodi/userdata).'; $st.kodiSum = 'no (paquete)'; return }
+    $nadd = @(Get-ChildItem -Directory -Path (Join-Path $root '.kodi\addons')).Count
+    $kb = [int]((Get-ChildItem -Recurse -File -Force -Path (Join-Path $root '.kodi') | Measure-Object -Property Length -Sum).Sum / 1024)
+    Bien "Build: $nadd addons, $([int]($kb/1024)) MB"
+    $sfree = 0; $dfl = @((S df -k /sdcard) -split "`n" | Where-Object { $_ -match '\S' })
+    if ($dfl.Count -ge 2) { $cols = $dfl[-1] -split '\s+'; if ($cols.Count -ge 4) { [void][int]::TryParse($cols[3], [ref]$sfree) } }
+    if ($sfree -gt 0 -and $sfree -lt ($kb * 2 + 250000)) { Aviso "No hay espacio en el TV: libres $([int]($sfree/1024)) MB, se necesitan ~$([int](($kb*2+250000)/1024)) MB. Kodi no se toco."; $st.kodiSum = 'no (sin espacio)'; Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $stg; return }
+    $have = $installed -contains $KPKG; $needInst = $false; $needUninst = $false
+    if ($have) {
+      $kv = DumpVc $KPKG
+      Say "   Kodi ya instalado: versionCode $($kv.vc), ABI $($kv.abi)"
+      if ($kv.abi -ne 'armeabi-v7a' -or $kv.vc -lt 2100000 -or $kv.vc -ge 2200000) {
+        if (-not $kodiRepl) { Aviso "El Kodi del TV no es compatible con el build (ABI $($kv.abi), version $($kv.vc)). Repite con `$KODIREEMPLAZAR=1 (se respalda, se desinstala y se pone el $KVER de 32 bits)."; $st.kodiSum = 'no (Kodi incompatible)'; Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $stg; return }
+        $needUninst = $true; $needInst = $true
+      } elseif ($kv.vc -lt $KVCODE) { $needInst = $true; Say "   Se actualiza a $KVER." }
+      else { Bien 'Kodi compatible; no se reinstala' }
+    } else { $needInst = $true; Say '   Kodi no esta instalado: se instala.' }
+    $apk = Join-Path $kw 'apk\kodi-21.3-Omega-armeabi-v7a.apk'
+    if ($needInst) {
+      if (-not (Test-Path $apk) -or (Sha256File $apk) -ne $apkSha) {
+        Say "   Descargando Kodi $KVER armeabi-v7a de mirrors.kodi.tv..."
+        try { Download $apkUrl "$apk.part"; Move-Item -Force "$apk.part" $apk } catch { Aviso 'No se pudo descargar Kodi de mirrors.kodi.tv.'; $st.kodiSum = 'no (descarga)'; Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $stg; return }
+      }
+      if ((Sha256File $apk) -ne $apkSha) { Remove-Item -Force $apk; Aviso 'El APK de Kodi descargado no coincide con el SHA256 oficial.'; $st.kodiSum = 'no (sha256)'; Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $stg; return }
+      Bien "APK verificado (sha256 $($apkSha.Substring(0,12))...)"
+    }
+    $kd = "/sdcard/Android/data/$KPKG/files"; $kbk = ''
+    if ($have -and (S "[ -d $kd/.kodi ] && echo y") -eq 'y') {
+      $kbk = Join-Path $kw "respaldos\kodi-$ipName-$ts.tar"
+      Say "   Respaldo del Kodi que tiene el TV (sin miniaturas ni cache) en $kbk ..."
+      $o = S "cd $kd && tar -cf /data/local/tmp/kodi-respaldo.tar --exclude=.kodi/userdata/Thumbnails --exclude=.kodi/addons/packages --exclude=.kodi/temp .kodi && echo TAR_OK"
+      LogQ "kodi backup: $o"
+      if ($o -notmatch 'TAR_OK') { A shell rm -f /data/local/tmp/kodi-respaldo.tar | Out-Null; Aviso 'No se pudo respaldar el Kodi del TV; no se cambio nada.'; $st.kodiSum = 'no (respaldo)'; Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $stg; return }
+      $o = A pull /data/local/tmp/kodi-respaldo.tar $kbk; LogQ "kodi pull: $o"
+      A shell rm -f /data/local/tmp/kodi-respaldo.tar | Out-Null
+      if (-not (Test-Path $kbk) -or (Get-Item $kbk).Length -lt 1024) { Aviso 'El respaldo salio mal; no se cambio nada en el TV.'; $st.kodiSum = 'no (respaldo)'; Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $stg; return }
+      Bien "Respaldo: $kbk ($([int]((Get-Item $kbk).Length/1MB)) MB)"
+    } else { Bien 'No habia datos de Kodi que respaldar' }
+    if ($dry) {
+      if ($needUninst) { Sim "adb uninstall $KPKG" }
+      if ($needInst) { Sim "adb install -r -g $(Split-Path $apk -Leaf)" }
+      Sim "pm clear $KPKG (solo datos de Kodi), permisos de almacenamiento de Kodi, abrir/cerrar Kodi, copiar el build ($nadd addons, $([int]($kb/1024)) MB) con adb push + tar"
+      Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $stg; $st.kodiSum = 'simulado'; return
+    }
+    if ($needUninst) { $o = A uninstall $KPKG; LogQ "kodi uninstall: $o"; if ($o -notmatch 'Success') { Aviso 'No se pudo desinstalar el Kodi incompatible.'; $st.kodiSum = 'no (desinstalar)'; return }; Bien 'Kodi anterior desinstalado' }
+    if ($needInst) {
+      if ($platform -notlike 'Fire*') { Say '   (Si en el TV sale un aviso de Play Protect, elige Mas detalles > Instalar de todas formas.)' 'Yellow' }
+      $o = A install -r -g $apk; LogQ "kodi install: $o"
+      if ($o -notmatch 'Success') { Aviso ("La instalacion de Kodi fallo: " + (($o -split "`n")[-1])); $st.kodiSum = 'no (instalacion)'; Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $stg; return }
+      Bien "Kodi $KVER instalado"
+    }
+    $dfree = 0; $dfl = @((S df -k /data) -split "`n" | Where-Object { $_ -match '\S' })
+    if ($dfl.Count -ge 2) { $cols = $dfl[-1] -split '\s+'; if ($cols.Count -ge 4) { [void][int]::TryParse($cols[3], [ref]$dfree) } }
+    if ($dfree -gt 0 -and $dfree -lt ($kb * 2 + 200000)) { Aviso "No hay espacio en el TV para copiar el build ($([int]($dfree/1024)) MB libres)."; $st.kodiSum = 'no (sin espacio)'; Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $stg; return }
+    Say '   Preparando el archivo para el TV...'
+    $tarf = Join-Path $kw 'kodi-sala.tar'; Remove-Item -Force -ErrorAction SilentlyContinue $tarf
+    $tarExe = Get-Command tar.exe -ErrorAction SilentlyContinue
+    if (-not $tarExe) { Aviso 'Esta Windows no tiene tar.exe (Windows 10 de 2018 o mas nuevo lo trae). Kodi no se copio.'; $st.kodiSum = 'no (falta tar.exe)'; return }
+    & $tarExe.Source -cf $tarf -C $root .kodi 2>&1 | ForEach-Object { LogQ "tar: $_" }
+    if (-not (Test-Path $tarf)) { Aviso 'No se pudo preparar el archivo tar.'; $st.kodiSum = 'no (tar)'; return }
+    A shell am force-stop $KPKG | Out-Null
+    LogQ ("pm clear: " + (S pm clear $KPKG))
+    A shell pm grant $KPKG android.permission.READ_EXTERNAL_STORAGE | Out-Null
+    A shell pm grant $KPKG android.permission.WRITE_EXTERNAL_STORAGE | Out-Null
+    if ($sdk -ge 30) { LogQ (A shell appops set $KPKG MANAGE_EXTERNAL_STORAGE allow) }
+    Say '   Abriendo Kodi unos segundos para que cree su carpeta...'
+    LogQ (A shell am start -n "$KPKG/.Splash")
+    for ($i = 0; $i -lt 45; $i++) { if ((S "[ -d $kd ] && echo y") -eq 'y') { break }; Start-Sleep -Seconds 2 }
+    if ((S "[ -d $kd ] && echo y") -ne 'y') { Aviso 'Kodi no creo su carpeta (salio algun aviso en el TV?).'; $st.kodiSum = 'no (carpeta)'; Remove-Item -Force -ErrorAction SilentlyContinue $tarf; return }
+    Start-Sleep -Seconds 4; A shell am force-stop $KPKG | Out-Null; Start-Sleep -Seconds 1
+    if ($sdk -ge 30) {
+      if ((S "[ -d $kd/.kodi ] && echo y") -eq 'y') { LogQ (A shell "mv $kd/.kodi $kd/.kodi-inicial-$ts") }
+    } else { LogQ (A shell "rm -rf $kd/.kodi") }
+    Say "   Copiando el build al TV ($nadd addons, $([int]($kb/1024)) MB)..."
+    $o = A push $tarf /data/local/tmp/kodi-sala.tar; LogQ "kodi push: $o"
+    Remove-Item -Force -ErrorAction SilentlyContinue $tarf
+    if ($o -match 'error|failed|No space') { Aviso 'Fallo la copia del build al TV.'; $st.kodiSum = 'no (copia)'; return }
+    Say '   Descomprimiendo en el TV...'
+    $o = S "mkdir -p $kd/.kodi && cd $kd && tar -xf /data/local/tmp/kodi-sala.tar && echo TAR_OK"; LogQ "kodi tar: $o"
+    A shell rm -f /data/local/tmp/kodi-sala.tar | Out-Null
+    if ($o -notmatch 'TAR_OK') { Aviso ("Fallo la descompresion en el TV: " + (($o -split "`n")[-1])); $st.kodiSum = 'no (descompresion)'; return }
+    if ($sdk -ge 30) { LogQ (A shell "chmod -R a+rwX $kd/.kodi") }
+    Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $stg
+    $tvn = 0; [void][int]::TryParse((S "ls $kd/.kodi/addons | wc -l"), [ref]$tvn)
+    if ($tvn -lt $nadd) { Aviso "En el TV hay $tvn addons y el build trae $nadd."; $st.kodiSum = "incompleto ($tvn de $nadd addons)"; return }
+    Bien "Addons en el TV: $tvn (build: $nadd)"
+    if ((S "grep -o skin.arctic.zephyr.mod $kd/.kodi/userdata/guisettings.xml | head -1") -match 'arctic') { Bien 'Skin: Arctic Zephyr Mod' } else { Aviso 'No pude confirmar la skin en guisettings.xml' }
+    Say '   Cuentas a iniciar de nuevo dentro de Kodi: TorBox en POV, Umbrella y ResolveURL (el paquete no lleva credenciales).'
+    if ($kbk) { Say "   Respaldo del Kodi anterior: $kbk" }
+    $st.kodiSum = 'Kodi con el build de la sala listo (TorBox: iniciar sesion otra vez en POV, Umbrella y ResolveURL)'
+  }
+  function Extras {
+    $k = 9
+    if ($retro) { try { RetroArchPaso $k } catch { Aviso "RetroArch: error inesperado: $($_.Exception.Message)"; LogQ ($_ | Out-String); $st.raSum = 'no (error)' }; $k++ }
+    if ($kodiOpt) { try { KodiPaso $k } catch { Aviso "Kodi: error inesperado: $($_.Exception.Message)"; LogQ ($_ | Out-String); $st.kodiSum = 'no (error)' } }
   }
 
   # ---------- apps del cliente (paso 8) ----------
@@ -812,7 +1091,7 @@
       $pinHash = ($sha.ComputeHash([Text.Encoding]::ASCII.GetBytes($PIN)) | ForEach-Object { $_.ToString('x2') }) -join ''
     }
     $st.serial = if ($IP -match ':') { $IP } else { "$($IP):5555" }
-    LogQ "ip=$IP theme=$THEME city=$city apps=$appsArg dry=$dry new_dock=$newDock noupdate=$noUpd noapps=$noApps buttons=$btn estilo=$estilo pin_set=$([bool]$PIN) ps=$($PSVersionTable.PSVersion) os=$([Environment]::OSVersion.VersionString)"
+    LogQ "ip=$IP theme=$THEME city=$city apps=$appsArg dry=$dry new_dock=$newDock noupdate=$noUpd noapps=$noApps buttons=$btn estilo=$estilo retroarch=$retro kodi=$kodiOpt pin_set=$([bool]$PIN) ps=$($PSVersionTable.PSVersion) os=$([Environment]::OSVersion.VersionString)"
 
     # ---------- 1. herramientas ----------
     Paso 1 'Preparando las herramientas (solo la primera vez tarda un poco)'
@@ -1181,9 +1460,12 @@
       Sim 'abrir Luk Home (am start --ez reload true) y pulsar Inicio para comprobar'
       $st.success = $true
       ActualizarApps
+      Extras
       Say ''
       Say '  SIMULACION TERMINADA SIN ERRORES - no se cambio nada en el TV.' 'Green'
       Say "  Apps: $($st.updSum)"
+      if ($st.raSum) { Say "  RetroArch: $($st.raSum)" }
+      if ($st.kodiSum) { Say "  Kodi: $($st.kodiSum)" }
       Say "  Respaldo de lectura: $bk"
       Say "  Registro: $($st.log)"
       return
@@ -1217,6 +1499,7 @@
     $st.success = $true
     $st.accChanged = $false; $st.homeChanged = $false; $st.uopChanged = $false   # comprobado: se queda aunque falle el paso 8
     ActualizarApps
+    Extras
     Say ''
     Say '  ##      ##  #######  ########  ######  ' 'Green'
     Say '  ##      ##  ##          ##    ##    ## ' 'Green'
@@ -1229,6 +1512,8 @@
     Say '  - Boton del tiempo (arriba a la derecha): temperatura, pronostico y "Cambiar ciudad".'
     Say '  - Ajustes queda protegido con PIN.'
     Say "  - Apps: $($st.updSum)"
+    if ($st.raSum) { Say "  - RetroArch: $($st.raSum) (juegos en /sdcard/ROMs o en una memoria USB; sin ROMs ni BIOS)" }
+    if ($st.kodiSum) { Say "  - Kodi: $($st.kodiSum)" }
     Say '  - Ya puedes cerrar esta ventana.'
     Say ''
     Say "  (Respaldo: $bk)"
@@ -1250,4 +1535,4 @@
   finally {
     if (-not $st.success) { try { RestoreAcc } catch { } }
   }
-} $IP $PIN $THEME $DRYRUN $NUEVODOCK $LUK_BUNDLE_URL $LUK_ADB $LUK_HOME_DIR $NOUPDATE $CIUDAD $APPS $BOTONES $ESTILO $SINAPPS
+} $IP $PIN $THEME $DRYRUN $NUEVODOCK $LUK_BUNDLE_URL $LUK_ADB $LUK_HOME_DIR $NOUPDATE $CIUDAD $APPS $BOTONES $ESTILO $SINAPPS $RETROARCH $KODI $KODIREEMPLAZAR
