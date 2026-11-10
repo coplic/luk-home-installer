@@ -381,14 +381,14 @@
   # ---------- Kodi de la sala (opcional: $KODI=1) ----------
   # Lo mismo que bundle/kodi/kodi-sala.sh (Mac): Kodi 21.3 oficial de kodi.tv (sha256), revisa ABI/API, respalda el
   # Kodi que haya, pm clear SOLO de Kodi, permisos, primera apertura, copia del build (tar en /data/local/tmp).
-  # El build (kodi-sala.zip, >100 MB) se baja del Release kodi-build-2026-11-09 de este repo y se comprueba su sha256.
+  # El build (kodi-sala.zip, >100 MB) se baja del Release kodi-build-2026-11-10 de este repo y se comprueba su sha256.
   function KodiPaso([int]$n) {
     Paso $n 'Kodi con el build de la sala ($KODI=1)'
     $KPKG = 'org.xbmc.kodi'; $KVER = '21.3'; $KVCODE = 2103000
     $apkUrl = 'https://mirrors.kodi.tv/releases/android/arm/kodi-21.3-Omega-armeabi-v7a.apk'
     $apkSha = '12d75e895649f68f217e42c2d881a94fd3177d7b9a7937825852aed545520cc8'
-    $zipUrl = 'https://github.com/coplic/luk-home-installer/releases/download/kodi-build-2026-11-09/kodi-sala.zip'
-    $zipSha = '9759a041fcd896e5304521fe7fb6555ace5225d3da1cb2618f47e8f6d9ca4187'
+    $zipUrl = 'https://github.com/coplic/luk-home-installer/releases/download/kodi-build-2026-11-10/kodi-sala.zip'
+    $zipSha = '67e4e8ddcb6a6f26bf96ffb0a2dba1318135969ae8c3490e5bb20eae1e620eca'
     $kw = Join-Path $work 'kodi'
     New-Item -ItemType Directory -Force -Path (Join-Path $kw 'apk'), (Join-Path $kw 'respaldos') | Out-Null
     $al = @("$abis" -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })

@@ -171,13 +171,13 @@ Solo uno de los dos: quita `--kodi` / `$KODI=1;` o `--retroarch` / `$RETROARCH=1
 - Si RetroArch está abierto en el TV (alguien jugando), no se toca. Si un núcleo no se pudo bajar, se puede bajar luego en
   RetroArch: Menú principal > Actualizador en línea > Descargar núcleos.
 
-**Kodi (`--kodi`, paso 10)** — el **Kodi de la sala** (192.168.0.122), con todos sus repos, addons, skin, menú, fondo,
+**Kodi (`--kodi`, paso 10)** — el **Kodi del TV del cuarto** (onn 4K Pro, 192.168.0.249; build 2026-11-10), con todos sus repos, addons, skin, menú, fondo,
 favoritos y ajustes, igual que `bundle/kodi/kodi-sala.sh` (Mac) / la función `KodiPaso` (Windows):
 - Kodi **21.3 oficial** de `mirrors.kodi.tv` (armeabi-v7a, sha256 `12d75e89…20cc8`), instalado si falta o si es más
   viejo. Necesita un TV que acepte apps de 32 bits ARM. Si el TV tiene un Kodi incompatible (64 bits u otra versión),
   avisa y no lo toca; con `--reemplazar-kodi` (Windows `$KODIREEMPLAZAR=1;`) lo respalda, lo desinstala y pone el 21.3.
-- El build (`kodi-sala.zip`, ~290 MB) se baja del **Release `kodi-build-2026-11-09`** de este repo y se comprueba su
-  sha256 (`9759a041…4187`). Se guarda en la computadora para la próxima vez.
+- El build (`kodi-sala.zip`, ~290 MB) se baja del **Release `kodi-build-2026-11-10`** de este repo y se comprueba su
+  sha256 (`67e4e8dd…0eca`). El build anterior (sala, `kodi-build-2026-11-09`) sigue en su Release. Se guarda en la computadora para la próxima vez.
 - **Respalda** el Kodi que ya tenga el TV en la computadora (`kodi/respaldos/`), luego **borra solo los datos de Kodi**
   (`pm clear org.xbmc.kodi`), le da permisos de almacenamiento (Android 11+: también "acceso a todos los archivos"), lo
   abre una vez para que cree su carpeta y copia el build (tar por `/data/local/tmp`). Ninguna otra app se toca.
@@ -437,13 +437,21 @@ bundle/
   retroarch/                --retroarch: tv-retroarch.sh (corre en el TV), cores.txt, ext/retroarch.cfg,
                             ext/autoconfig/ (mandos), ra/config/*/*.opt, ra/system/mame2003-plus/hiscore.dat
                             (el APK y los núcleos se bajan de buildbot.libretro.com; sin ROMs ni BIOS)
-  kodi/kodi-sala.sh         --kodi en Mac (el instalador del Kodi de la sala); el build va en el Release kodi-build-2026-11-09
+  kodi/kodi-sala.sh         --kodi en Mac (el instalador del Kodi de la sala); el build va en el Release kodi-build-2026-11-10
 ```
 
 Los tres APK son compilaciones *debug* firmadas con la misma llave (necesario para `run-as`). Al actualizar un APK: reemplazarlo en `bundle/apks/`, regenerar `bundle/SHA256SUMS` (`cd bundle && shasum -a 256 apks/*.apk logo.png > SHA256SUMS`) y hacer push. GitHub puede tardar ~5 min en servir el archivo nuevo.
 
 ## Cambios
 
+- **2026-11-10c:** El build de Kodi de `--kodi` (Windows `$KODI=1;`) ahora es el del **TV del cuarto** (onn 4K Pro,
+  192.168.0.249), tomado el 2026-11-10 en solo lectura: Release **`kodi-build-2026-11-10`**, `kodi-sala.zip` de
+  303.572.756 bytes, sha256 `67e4e8dd…0eca`. Trae el menú principal del cuarto (Películas / series, Deportes live,
+  Repeticiones, TV, Anime / novelas, Juegos, Ajustes, X) con sus submenús, `game.controller.remote` 1.0.33 y la lista de
+  decodificadores de la onn; los otros 109 addons, repos y skin tienen las mismas versiones que el build de la sala.
+  Sin cuentas (TorBox se vuelve a iniciar en POV, Umbrella y ResolveURL), sin partidas guardadas, ROMs ni BIOS. El
+  build anterior (`kodi-build-2026-11-09`) sigue publicado. Los APK de Luk Home (2026-11-10b), `SHA256SUMS`, temas,
+  `--retroarch` y los pasos 1–9 no cambian.
 - **2026-11-10b:** Luk Home nuevo (los 3 APK, versión `2026-11-10b`, versionCode 2026111002, misma firma: se
   actualiza encima y conserva PIN, inicio, temas y ajustes). **Mantener OK** en una app del inicio ya no pide el PIN
   directo: abre un menú con **Borrar caché** (abre la info de esa app: forzar detención / borrar caché, **sin PIN**,

@@ -26,9 +26,9 @@ set -u
 main() {
   # ======== CONFIGURACIÓN DEL REPO (cambiar al publicar) ========
   local GITHUB_REPO="coplic/luk-home-installer"   # mismo repo del instalador de Luk Home
-  local RELEASE_TAG="kodi-build-2026-11-09"        # Release con el paquete (más de 100 MB: no va en git)
+  local RELEASE_TAG="kodi-build-2026-11-10"        # Release con el paquete (más de 100 MB: no va en git)
   local ASSET="kodi-sala.zip"                  # nombre del archivo subido al Release
-  local ZIP_SHA="9759a041fcd896e5304521fe7fb6555ace5225d3da1cb2618f47e8f6d9ca4187"   # sha256 de kodi-sala.zip (303.169.032 bytes)
+  local ZIP_SHA="67e4e8ddcb6a6f26bf96ffb0a2dba1318135969ae8c3490e5bb20eae1e620eca"   # sha256 de kodi-sala.zip (303.572.756 bytes)
   # ===============================================================
   local PKG_URL_DEFAULT="https://github.com/$GITHUB_REPO/releases/latest/download/$ASSET"
   [ "$RELEASE_TAG" = latest ] || PKG_URL_DEFAULT="https://github.com/$GITHUB_REPO/releases/download/$RELEASE_TAG/$ASSET"

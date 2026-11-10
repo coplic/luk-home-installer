@@ -951,7 +951,7 @@ $(printf '%s\n' $EXTRA_PKGS)"
   # ---------- Kodi de la sala (opcional: --kodi / KODI=1) ----------
   # Usa bundle/kodi/kodi-sala.sh (el mismo instalador del Kodi de la sala): Kodi 21.3 oficial con sha256, revisa
   # ABI/API, respalda el Kodi que haya, pm clear SOLO de Kodi, permisos, primera apertura, copia del build por
-  # tar en /data/local/tmp. El build (kodi-sala.zip, >100 MB) se baja del Release kodi-build-2026-11-09 de este repo.
+  # tar en /data/local/tmp. El build (kodi-sala.zip, >100 MB) se baja del Release kodi-build-2026-11-10 de este repo.
   kodi_paso() {
     local n=$1 ka=""
     paso "$n" "Kodi con el build de la sala (--kodi)"
