@@ -444,6 +444,15 @@ Los tres APK son compilaciones *debug* firmadas con la misma llave (necesario pa
 
 ## Cambios
 
+- **2026-11-10b:** Luk Home nuevo (los 3 APK, versión `2026-11-10b`, versionCode 2026111002, misma firma: se
+  actualiza encima y conserva PIN, inicio, temas y ajustes). **Mantener OK** en una app del inicio ya no pide el PIN
+  directo: abre un menú con **Borrar caché** (abre la info de esa app: forzar detención / borrar caché, **sin PIN**,
+  igual que la tecla Menú corta) y **Editar inicio** (pide el PIN como antes y abre el menú de edición). Así los
+  controles sin tecla Menú (onn / Google TV) también pueden borrar la caché. La tecla Info (si el control la tiene) hace
+  lo mismo que Menú corta. La info de **Luk Home** nunca se abre sin PIN (ni desde el menú ni llegando por la lista de
+  apps de Fire OS): forzar su detención quitaría el bloqueo y borrar sus datos borraría el PIN. Ojo: en la info de la app
+  el cliente también ve "Borrar datos" (borra el login de esa app). Lo demás (pasos 1–10, temas, `--retroarch`, `--kodi`)
+  no cambia.
 - **2026-11-10a:** Dos opciones nuevas, **apagadas por defecto** (sin ellas todo funciona igual que en 2026-11-07a):
   `--retroarch` (Windows `$RETROARCH=1;`) instala o actualiza RetroArch 1.22.2 oficial con la configuración del TV del
   cuarto (cfg, 7 núcleos oficiales, opciones de FCEUmm / MAME 2003-Plus, mandos, hiscore.dat, carpetas de juegos vacías en
