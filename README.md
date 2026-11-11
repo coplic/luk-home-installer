@@ -75,7 +75,7 @@ $IP='192.168.1.50'; $PIN='1234'; $THEME='real-madrid,real-madrid-2,navidad,terro
 - **IP**: la del TV del cliente (ver abajo).
 - **PIN**: 4 números, protege Ajustes de Luk Home. En Windows **siempre entre comillas** (`'0123'`) para no perder ceros. Para no poner PIN: `sinpin`.
 - **Tema** (opcional): `paisajes`, `mar`, `espacio`, `autos`, `animales`, `barcos`, `american-sports`, `terror` (antes `halloween-terror`, que sigue valiendo),
-  o un tema personalizado (ver abajo; ya vienen `real-madrid`, `real-madrid-2`, `navidad`, `barcelona` y `real-madrid-3`). En Mac va como 3.er valor; en Windows `$THEME='mar';` (o quítalo, y van todos los incluidos).
+  o un tema personalizado (ver abajo; ya vienen `real-madrid`, `real-madrid-2`, `navidad`, `barcelona`, `real-madrid-3`, `barcelona-cule` e `inter-miami-messi`). En Mac va como 3.er valor; en Windows `$THEME='mar';` (o quítalo, y van todos los incluidos).
   - **Un solo nombre** (`mar`): van al TV **todos** los temas y `mar` queda como tema inicial.
   - **Una lista con comas, sin espacios** (`autos,mar,espacio`): van al TV **solo esos**; el **primero** es el inicial.
     `todos` dentro de la lista agrega todos los incluidos (p. ej. `terror,todos`).
@@ -107,12 +107,16 @@ Temas personalizados que ya vienen en el paquete (fuera de `order.txt`, solo par
 | `navidad` | Navidad | chimenea, árbol decorado, pueblo nevado, trineo de Santa, adornos, regalos, cabaña nevada |
 | `barcelona` | Barcelona | Camp Nou, túnel, balón, bufanda, vestuario, portería, botas, blaugrana, y 2 fotos de una amiga en el estadio y en la tribuna |
 | `real-madrid-3` | Real Madrid Amiga | las 8 fotos del club de `real-madrid` y 2 fotos de una amiga: en el Bernabéu y con la Champions |
+| `barcelona-cule` | Barcelona culé | Camp Nou al atardecer y de noche, cinco Champions, La Liga, Copa del Rey, vitrina, banderas blaugrana, escudo oficial y Supercopa de la UEFA (sin personas; escudo oficial en las 10) |
+| `inter-miami-messi` | Inter Miami Messi | Messi con la camiseta rosa oficial de Inter Miami, MLS Cup y Leagues Cup, estadio y playa de Miami; 2 fotos con un amigo (MLS Cup de noche y playa al atardecer); escudo oficial en las 10 |
 
-`barcelona` y `real-madrid-3` **no** están en las líneas de arriba ni en `order.txt`. Solo llegan si la línea de ese cliente los nombra.
+`barcelona`, `real-madrid-3`, `barcelona-cule` e `inter-miami-messi` **no** están en las líneas de arriba ni en `order.txt`. Solo llegan si la línea de ese cliente los nombra.
 
 Ejemplos: Mac `… 1234 real-madrid` (Real Madrid inicial + todos los incluidos), `… 1234 real-madrid,navidad` (solo esos dos),
 `… 1234 barcelona` (Barcelona inicial + todos los incluidos) o `… 1234 barcelona,real-madrid-3` (solo esos dos);
-Windows `$THEME='real-madrid';`, `$THEME='navidad,todos';`, `$THEME='barcelona';` o `$THEME='real-madrid-3';`.
+`… 1234 barcelona-cule,` o `… 1234 inter-miami-messi,` (solo ese tema; la coma final = únicamente los nombrados);
+Windows `$THEME='real-madrid';`, `$THEME='navidad,todos';`, `$THEME='barcelona';`, `$THEME='real-madrid-3';`,
+`$THEME='barcelona-cule,';` o `$THEME='inter-miami-messi,';`.
 
 Extras opcionales:
 
@@ -444,6 +448,11 @@ Los tres APK son compilaciones *debug* firmadas con la misma llave (necesario pa
 
 ## Cambios
 
+- **2026-11-11a:** Temas personalizados nuevos **`barcelona-cule`** (botón Temas: "Barcelona culé") e **`inter-miami-messi`**
+  (botón Temas: "Inter Miami Messi"). Cada uno tiene 10 fondos 1920×1080. No están en `order.txt` ni en las líneas
+  genéricas de copiar y pegar: un cliente genérico no los recibe. Se piden por nombre (`barcelona-cule`, `inter-miami-messi`,
+  o con coma final `barcelona-cule,` / `inter-miami-messi,` para instalar solo ese). Los APK, `SHA256SUMS`, el paso 8
+  (Troypoint, Stremio, TizenTube) y las opciones no cambian.
 - **2026-11-10c:** El build de Kodi de `--kodi` (Windows `$KODI=1;`) ahora es el del **TV del cuarto** (onn 4K Pro,
   192.168.0.249), tomado el 2026-11-10 en solo lectura: Release **`kodi-build-2026-11-10`**, `kodi-sala.zip` de
   303.572.756 bytes, sha256 `67e4e8dd…0eca`. Trae el menú principal del cuarto (Películas / series, Deportes live,
