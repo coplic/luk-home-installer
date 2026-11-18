@@ -75,7 +75,7 @@ $IP='192.168.1.50'; $PIN='1234'; $THEME='real-madrid,real-madrid-2,navidad,terro
 - **IP**: la del TV del cliente (ver abajo).
 - **PIN**: 4 números, protege Ajustes de Luk Home. En Windows **siempre entre comillas** (`'0123'`) para no perder ceros. Para no poner PIN: `sinpin`.
 - **Tema** (opcional): `paisajes`, `mar`, `espacio`, `autos`, `animales`, `barcos`, `american-sports`, `terror` (antes `halloween-terror`, que sigue valiendo),
-  o un tema personalizado (ver abajo; ya vienen `real-madrid`, `real-madrid-2`, `navidad`, `barcelona`, `real-madrid-3`, `barcelona-cule` e `inter-miami-messi`). En Mac va como 3.er valor; en Windows `$THEME='mar';` (o quítalo, y van todos los incluidos).
+  o un tema personalizado (ver abajo; ya vienen `real-madrid`, `real-madrid-2`, `navidad`, `barcelona`, `real-madrid-3`, `barcelona-cule`, `inter-miami-messi` y `gta-vi`). En Mac va como 3.er valor; en Windows `$THEME='mar';` (o quítalo, y van todos los incluidos).
   - **Un solo nombre** (`mar`): van al TV **todos** los temas y `mar` queda como tema inicial.
   - **Una lista con comas, sin espacios** (`autos,mar,espacio`): van al TV **solo esos**; el **primero** es el inicial.
     `todos` dentro de la lista agrega todos los incluidos (p. ej. `terror,todos`).
@@ -109,14 +109,16 @@ Temas personalizados que ya vienen en el paquete (fuera de `order.txt`, solo par
 | `real-madrid-3` | Real Madrid Amiga | las 8 fotos del club de `real-madrid` y 2 fotos de una amiga: en el Bernabéu y con la Champions |
 | `barcelona-cule` | Barcelona culé | Camp Nou al atardecer y de noche, cinco Champions, La Liga, Copa del Rey, vitrina, banderas blaugrana, escudo oficial y Supercopa de la UEFA (sin personas; escudo oficial en las 10) |
 | `inter-miami-messi` | Inter Miami Messi | Messi con la camiseta rosa oficial de Inter Miami, MLS Cup y Leagues Cup, estadio y playa de Miami; 2 fotos con un amigo (MLS Cup de noche y playa al atardecer); escudo oficial en las 10 |
+| `gta-vi` | GTA VI | 21 fondos de Vice City / Leonida al estilo key-art oficial: 12 de Rafael (logo VI, collage, piscina, gasolinera, coches y skyline, pareja, Ocean Drive aéreo, pool party, BMW rosa, lounge) intercaladas con 9 nuevas (persecuciones, airboat, yate, playa, club neón, motel con flamencos, motocicleta); logos oficiales VI / Grand Theft Auto VI |
 
-`barcelona`, `real-madrid-3`, `barcelona-cule` e `inter-miami-messi` **no** están en las líneas de arriba ni en `order.txt`. Solo llegan si la línea de ese cliente los nombra.
+`barcelona`, `real-madrid-3`, `barcelona-cule`, `inter-miami-messi` y `gta-vi` **no** están en las líneas de arriba ni en `order.txt`. Solo llegan si la línea de ese cliente los nombra.
 
 Ejemplos: Mac `… 1234 real-madrid` (Real Madrid inicial + todos los incluidos), `… 1234 real-madrid,navidad` (solo esos dos),
 `… 1234 barcelona` (Barcelona inicial + todos los incluidos) o `… 1234 barcelona,real-madrid-3` (solo esos dos);
 `… 1234 barcelona-cule,` o `… 1234 inter-miami-messi,` (solo ese tema; la coma final = únicamente los nombrados);
+`… 1234 gta-vi` (GTA VI inicial + todos los incluidos) o `… 1234 gta-vi,` (solo ese);
 Windows `$THEME='real-madrid';`, `$THEME='navidad,todos';`, `$THEME='barcelona';`, `$THEME='real-madrid-3';`,
-`$THEME='barcelona-cule,';` o `$THEME='inter-miami-messi,';`.
+`$THEME='barcelona-cule,';`, `$THEME='inter-miami-messi,';`, `$THEME='gta-vi';` o `$THEME='gta-vi,todos';`.
 
 Extras opcionales:
 
@@ -448,6 +450,7 @@ Los tres APK son compilaciones *debug* firmadas con la misma llave (necesario pa
 
 ## Cambios
 
+- **2026-11-18a:** Tema personalizado nuevo **`gta-vi`** (botón Temas: "GTA VI"), 21 fondos 1920×1080 (12 de Rafael intercaladas con 9 nuevas al estilo key-art oficial de Vice City / Leonida; logos oficiales VI / Grand Theft Auto VI). No está en `order.txt` ni en las líneas genéricas de copiar y pegar: un cliente genérico no lo recibe. Se pide por nombre (`gta-vi` o `gta-vi,todos` para que quede como tema inicial junto a todos los incluidos; `gta-vi,` para instalar solo ese). Los APK, `SHA256SUMS`, el paso 8 (Troypoint, Stremio, TizenTube) y las opciones no cambian.
 - **2026-11-11a:** Temas personalizados nuevos **`barcelona-cule`** (botón Temas: "Barcelona culé") e **`inter-miami-messi`**
   (botón Temas: "Inter Miami Messi"). Cada uno tiene 10 fondos 1920×1080. No están en `order.txt` ni en las líneas
   genéricas de copiar y pegar: un cliente genérico no los recibe. Se piden por nombre (`barcelona-cule`, `inter-miami-messi`,
